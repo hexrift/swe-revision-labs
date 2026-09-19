@@ -1,12 +1,12 @@
 # SWE Revision Labs
 
-A focused, local-first revision app for senior software engineers and above.
+A focused, local-first revision app for software engineering technical revision.
 
 **Daily flow:** choose a topic → choose a subtopic → choose TypeScript, JavaScript or Python → understand → visualize → code → self-check → mark comfortable → move on.
 
 ## What is included
 
-- 12 senior SWE domains covering complexity, algorithms, concurrency, system design, distributed systems, architecture, networking/protocols, databases, secure coding, reliability/observability, testing/delivery, and AI/MCP engineering.
+- 12 core SWE domains covering complexity, algorithms, concurrency, system design, distributed systems, architecture, networking/protocols, databases, secure coding, reliability/observability, testing/delivery, and AI/MCP engineering.
 - A deliberately deep complexity track: growth classes, time vs space, hidden allocations, amortized/expected analysis, recursion/DP, JS/TS traps, Python traps, and system-boundary complexity.
 - Interactive SVG/CSS visual models rather than static documentation walls.
 - Monaco Editor loaded in-browser.

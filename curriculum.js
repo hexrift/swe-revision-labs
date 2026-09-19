@@ -39,7 +39,7 @@ export const TOPICS = [
         ['Ignoring multiple inputs', 'For nested work over arrays of lengths n and m, O(n·m) is more informative than calling both n.'],
         ['Confusing measured speed with growth', 'A tiny O(n²) routine can beat O(n log n) for small n; asymptotics describe scaling, not constants.']
       ],
-      tradeoffs: 'A senior answer pairs asymptotic complexity with the expected input range, constant factors, allocation behaviour, cache locality, and I/O boundaries.',
+      tradeoffs: 'A strong answer pairs asymptotic complexity with the expected input range, constant factors, allocation behaviour, cache locality, and I/O boundaries.',
       exampleKind: 'membership', exerciseKind: 'twoSum'
     }),
     L('space', 'Space complexity & hidden allocations', 20, 'Separate input, output, auxiliary memory, stack depth, copies, and garbage-collection pressure.', {
@@ -52,7 +52,7 @@ export const TOPICS = [
       exampleKind: 'copying', exerciseKind: 'dedupe'
     }),
     L('amortized', 'Amortized & expected complexity', 20, 'Understand why occasional expensive operations can still produce cheap average cost over a sequence.', {
-      visual: 'amortized', difficulty: 'Senior', sources: ['mitAlgo','clrs'],
+      visual: 'amortized', difficulty: 'Advanced', sources: ['mitAlgo','clrs'],
       objectives: ['Explain dynamic-array append as amortized O(1).', 'Separate average/expected hash-table behaviour from worst case.', 'Use aggregate reasoning rather than hand-waving “average”.'],
       mentalModel: 'Amortized analysis spreads infrequent expensive operations across many cheap operations in a sequence. Expected analysis depends on a probability model. They are different ideas.',
       bullets: ['A growing array occasionally copies O(n) elements, but geometric capacity growth makes total copying across n appends O(n).', 'Hash maps are typically expected/average O(1) for lookup under healthy hashing and load, not an unconditional worst-case guarantee.', 'A pathological collision pattern can degrade a hash structure; production runtimes use various mitigations.', 'Amortized bounds do not mean each individual operation is cheap.'],
@@ -61,7 +61,7 @@ export const TOPICS = [
       exampleKind: 'amortized', exerciseKind: 'boundedBuffer'
     }),
     L('recursion-dp', 'Recursion, recurrences & dynamic programming', 25, 'See how repeated subproblems create exponential work and how memoization changes both time and space.', {
-      visual: 'recursion', difficulty: 'Senior', sources: ['mitAlgo','clrs'],
+      visual: 'recursion', difficulty: 'Advanced', sources: ['mitAlgo','clrs'],
       objectives: ['Estimate recursion-tree growth.', 'Recognise overlapping subproblems.', 'Explain memoization vs tabulation trade-offs.'],
       mentalModel: 'For recursive code, count branches and depth. A branching factor b over depth d can create roughly b^d calls unless branches terminate or repeated states are reused.',
       bullets: ['Naive Fibonacci repeats the same subproblems and grows exponentially.', 'Memoization trades O(n) storage for O(n) work in the classic Fibonacci example.', 'Divide-and-conquer such as merge sort has multiple branches but shrinking subproblems and combines to O(n log n).', 'Backtracking can be exponential even when each individual recursive frame looks small.'],
@@ -88,12 +88,12 @@ export const TOPICS = [
       exampleKind: 'pythonTraps', exerciseKind: 'firstUnique'
     }),
     L('systems-complexity', 'Complexity across system boundaries', 20, 'Extend complexity reasoning to database calls, network fan-out, serialization, pagination and concurrency.', {
-      visual: 'nplusone', difficulty: 'Staff', sources: ['googleSre','awsBuilders','postgres'],
+      visual: 'nplusone', difficulty: 'Advanced', sources: ['googleSre','awsBuilders','postgres'],
       objectives: ['Recognise N+1 I/O patterns.', 'Reason about remote-call count as an input dimension.', 'Separate total work, wall-clock latency and resource contention.'],
       mentalModel: 'At system scale, a remote call is not “O(1)” in the useful sense. Count the number of calls, bytes, rows, partitions and fan-out targets, then discuss latency and failure amplification.',
       bullets: ['Fetching one page plus one query per row creates O(n) round trips even if each query is indexed.', 'Batching can reduce call count while increasing payload size and memory.', 'Parallel fan-out can reduce latency but increases simultaneous load and broadens the failure surface.', 'Serialization/deserialization is O(bytes), which matters for large JSON payloads and hot APIs.'],
       traps: [['Only analysing in-process loops', 'Production bottlenecks frequently come from remote calls and data volume rather than CPU instructions.'], ['Parallelising N+1 blindly', 'You may trade slow latency for database overload. Fix query shape before adding concurrency.'], ['Ignoring output size', 'No algorithm can emit k output items in less than Ω(k) work to actually materialise them.']],
-      tradeoffs: 'Senior design balances algorithmic work, round trips, data volume, concurrency limits and tail latency.',
+      tradeoffs: 'A strong design balances algorithmic work, round trips, data volume, concurrency limits and tail latency.',
       exampleKind: 'nplusone', exerciseKind: 'batchLoader'
     }),
   ]),

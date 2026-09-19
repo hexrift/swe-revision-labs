@@ -58,7 +58,7 @@ function homeView() {
   return `${topbar()}<main class="shell">
     <div class="home-grid">
       <section class="hero-card">
-        <div class="eyebrow">Daily senior engineering revision</div>
+        <div class="eyebrow">Daily software engineering revision</div>
         <h1 class="hero-title">One lab. One mental model. Then move on.</h1>
         <p class="hero-sub">Pick a topic and language, learn the concept visually, run code in the browser, and only mark it complete when you can explain the trade-offs without prompts.</p>
         <div class="hero-actions">
@@ -123,7 +123,7 @@ function sourceLinks(lab) {
 function understandStep(lab) {
   return `<div class="lesson-grid"><div>
     <section class="content-card"><div class="eyebrow">Mental model</div><h2 style="margin-top:10px">${h(lab.mentalModel || lab.summary)}</h2><p>${h(lab.summary)}</p>
-      <div class="callout"><strong>Say it like a senior:</strong> ${h(lab.tradeoffs || 'State the assumption, the trade-off, and what would make you choose differently.')}</div>
+      <div class="callout"><strong>Explain it clearly:</strong> ${h(lab.tradeoffs || 'State the assumption, the trade-off, and what would make you choose differently.')}</div>
     </section>
     <section class="content-card" style="margin-top:14px"><h3>What you should be able to do</h3><ul>${(lab.objectives||[]).map(x=>`<li>${h(x)}</li>`).join('')}</ul></section>
     <section class="content-card" style="margin-top:14px"><h3>Key ideas</h3><ul>${(lab.bullets||[]).map(x=>`<li>${h(x)}</li>`).join('')}</ul></section>
@@ -133,7 +133,7 @@ function understandStep(lab) {
   </aside></div>`;
 }
 
-function visualStep(lab) { return `<div class="lesson-grid"><section class="visual-shell" id="visual-root">${renderVisual(lab.visual)}</section><section class="content-card"><div class="eyebrow">Use the visual</div><h2 style="margin-top:10px">Explain what changes as load or state grows.</h2><p>Do not memorise the picture. Narrate it: identify the moving part, the invariant, the bottleneck, and the trade-off.</p><div class="callout"><strong>60-second drill:</strong> explain this diagram aloud without using the words “basically”, “just”, or “obviously”. Then name one situation where you would choose a different design.</div><div class="callout warn"><strong>Senior signal:</strong> state what the diagram deliberately leaves out—failure, data size, tail latency, trust boundaries, or operational cost.</div></section></div>`; }
+function visualStep(lab) { return `<div class="lesson-grid"><section class="visual-shell" id="visual-root">${renderVisual(lab.visual)}</section><section class="content-card"><div class="eyebrow">Use the visual</div><h2 style="margin-top:10px">Explain what changes as load or state grows.</h2><p>Do not memorise the picture. Narrate it: identify the moving part, the invariant, the bottleneck, and the trade-off.</p><div class="callout"><strong>60-second drill:</strong> explain this diagram aloud without using the words “basically”, “just”, or “obviously”. Then name one situation where you would choose a different design.</div><div class="callout warn"><strong>Look beyond the diagram:</strong> state what the diagram deliberately leaves out—failure, data size, tail latency, trust boundaries, or operational cost.</div></section></div>`; }
 
 function codeStep(lab) {
   const ex=getExample(lab.exampleKind,state.language);
@@ -161,7 +161,7 @@ function labView(lab) {
   const topic=findTopic(lab.topicId); const comfortable=!!state.comfortable[lab.id]; const next=nextLab(lab);
   const stepContent=[understandStep,visualStep,codeStep,checkStep][state.step](lab);
   return `${topbar()}<main class="shell"><div class="lab-layout">${sidebar(lab)}<section class="lab-stage">
-    <header class="lab-header"><div class="lab-breadcrumb">${h(topic.title)} · Lab ${topic.labs.findIndex(x=>x.id===lab.id)+1} of ${topic.labs.length}</div><div class="lab-title-row"><div><h1>${h(lab.title)}</h1><p>${h(lab.summary)}</p></div><span class="lab-pill">≈ ${lab.minutes || 20} min · ${h(lab.difficulty || 'Senior')}</span></div></header>
+    <header class="lab-header"><div class="lab-breadcrumb">${h(topic.title)} · Lab ${topic.labs.findIndex(x=>x.id===lab.id)+1} of ${topic.labs.length}</div><div class="lab-title-row"><div><h1>${h(lab.title)}</h1><p>${h(lab.summary)}</p></div><span class="lab-pill">≈ ${lab.minutes || 20} min · ${h(lab.difficulty || 'Advanced')}</span></div></header>
     ${stepper(lab)}<div class="stage-body">${stepContent}</div>
     <footer class="lab-footer"><div class="comfort"><button class="comfort-check ${comfortable?'on':''}" data-action="comfortable">${comfortable?'✓':'○'}</button><span>${comfortable?'Comfortable — revisit any time':'Not marked comfortable yet'}</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ghost-btn" data-action="prev-step" ${state.step===0?'disabled':''}>← Previous</button>${state.step<3?`<button class="primary-btn" data-action="next-step">Next step →</button>`:`<button class="primary-btn" data-action="complete-next" ${comfortable?'':'disabled'}>${next?'Next lab →':'Curriculum complete →'}</button>`}</div></footer>
   </section></div></main>${footer()}`;
@@ -170,7 +170,7 @@ function labView(lab) {
 function quizView() {
   const qstate=state.quiz || defaults.quiz; const idx=Math.min(qstate.current || 0, FINAL_QUIZ.length-1); const q=FINAL_QUIZ[idx]; const answered=Object.keys(qstate.answers||{}).length;
   if(qstate.completed) return quizResults();
-  return `${topbar()}<main class="shell"><div class="quiz-layout"><section class="quiz-card"><div class="eyebrow">Comprehensive final review</div><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><h2 style="margin:10px 0 0">Question ${idx+1} of ${FINAL_QUIZ.length}</h2><span class="lab-pill">${h(findTopic(q.topic)?.title || q.topic)}</span></div><div class="quiz-question">${h(q.question)}</div><div class="quiz-options">${q.options.map((o,i)=>`<button class="quiz-option ${qstate.answers[idx]===i?'selected':''}" data-quiz-answer="${i}">${String.fromCharCode(65+i)}. ${h(o)}</button>`).join('')}</div><div class="quiz-nav"><button class="ghost-btn" data-quiz-nav="${idx-1}" ${idx===0?'disabled':''}>← Previous</button>${idx===FINAL_QUIZ.length-1?`<button class="primary-btn" data-action="submit-quiz" ${answered<FINAL_QUIZ.length?'disabled':''}>Finish & score</button>`:`<button class="primary-btn" data-quiz-nav="${idx+1}">Next →</button>`}</div></section><aside class="sidebar-card"><h3>Progress</h3><p>${answered}/${FINAL_QUIZ.length} answered. Your answers are saved locally.</p><div class="progress-track"><span style="width:${pct(answered,FINAL_QUIZ.length)}%"></span></div><div class="question-map">${FINAL_QUIZ.map((_,i)=>`<button class="question-dot ${qstate.answers[i]!==undefined?'answered':''} ${i===idx?'active':''}" data-quiz-nav="${i}">${i+1}</button>`).join('')}</div><div class="callout" style="margin-top:14px">This is a fixed 48-question bank: four questions across each of the 12 senior SWE domains.</div><button class="danger-btn" data-action="reset-quiz">Reset final review</button></aside></div></main>${footer()}`;
+  return `${topbar()}<main class="shell"><div class="quiz-layout"><section class="quiz-card"><div class="eyebrow">Comprehensive final review</div><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><h2 style="margin:10px 0 0">Question ${idx+1} of ${FINAL_QUIZ.length}</h2><span class="lab-pill">${h(findTopic(q.topic)?.title || q.topic)}</span></div><div class="quiz-question">${h(q.question)}</div><div class="quiz-options">${q.options.map((o,i)=>`<button class="quiz-option ${qstate.answers[idx]===i?'selected':''}" data-quiz-answer="${i}">${String.fromCharCode(65+i)}. ${h(o)}</button>`).join('')}</div><div class="quiz-nav"><button class="ghost-btn" data-quiz-nav="${idx-1}" ${idx===0?'disabled':''}>← Previous</button>${idx===FINAL_QUIZ.length-1?`<button class="primary-btn" data-action="submit-quiz" ${answered<FINAL_QUIZ.length?'disabled':''}>Finish & score</button>`:`<button class="primary-btn" data-quiz-nav="${idx+1}">Next →</button>`}</div></section><aside class="sidebar-card"><h3>Progress</h3><p>${answered}/${FINAL_QUIZ.length} answered. Your answers are saved locally.</p><div class="progress-track"><span style="width:${pct(answered,FINAL_QUIZ.length)}%"></span></div><div class="question-map">${FINAL_QUIZ.map((_,i)=>`<button class="question-dot ${qstate.answers[i]!==undefined?'answered':''} ${i===idx?'active':''}" data-quiz-nav="${i}">${i+1}</button>`).join('')}</div><div class="callout" style="margin-top:14px">This is a fixed 48-question bank: four questions across each of the 12 core SWE domains.</div><button class="danger-btn" data-action="reset-quiz">Reset final review</button></aside></div></main>${footer()}`;
 }
 
 function quizResults() {
