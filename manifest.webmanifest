@@ -1,0 +1,9 @@
+{
+  "name": "SWE Revision Labs",
+  "short_name": "SWE Labs",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0a0f1d",
+  "theme_color": "#0a0f1d",
+  "description": "Daily senior software engineering revision labs with interactive visuals and live coding."
+}
