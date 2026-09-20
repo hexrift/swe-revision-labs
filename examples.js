@@ -394,7 +394,7 @@ export const EXERCISES = {
 `,
 `const check = (actual, expected, label) => {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(`${label}: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`);
+    throw new Error(label + ': expected ' + JSON.stringify(expected) + ', received ' + JSON.stringify(actual));
   }
 };
 check(twoSum([2,7,11,15], 9), [0,1], 'basic case');
