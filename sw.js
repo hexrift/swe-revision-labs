@@ -1,5 +1,5 @@
-const CACHE='swe-revision-labs-v7';
-const CORE=['./','./index.html','./styles.css','./app.js','./patterns.js','./quiz.js','./manifest.webmanifest'];
+const CACHE='swe-revision-labs-v8';
+const CORE=['./','./index.html','./styles.css','./app.js','./patterns.js','./architecture.js','./quiz.js','./manifest.webmanifest'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{

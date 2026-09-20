@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v6
       - name: Validate JavaScript syntax
         run: |
-          for file in app.js patterns.js quiz.js; do
+          for file in app.js patterns.js architecture.js quiz.js; do
             node --check "$file"
           done
       - name: Configure Pages

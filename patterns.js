@@ -1,4 +1,6 @@
-export const SOURCES = {
+import { ARCHITECTURE_SOURCES, ARCHITECTURE_PATTERNS } from './architecture.js';
+
+export const SOURCES = { ...ARCHITECTURE_SOURCES,
   mdnStyle: { label: 'MDN · JavaScript code style', url: 'https://developer.mozilla.org/en-US/docs/MDN/Writing_guidelines/Code_style_guide/JavaScript' },
   mdnClasses: { label: 'MDN · Using classes', url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_classes' },
   mdnVars: { label: 'MDN · Variables', url: 'https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/Variables' },
@@ -24,7 +26,8 @@ export const CATEGORIES = [
   { id:'collections', title:'Collections & complexity', icon:'04', description:'Arrays, sets, maps, queues, copying and lookup costs.' },
   { id:'web', title:'Async, HTTP & protocols', icon:'05', description:'Event loops, retries, idempotency, streams and sockets.' },
   { id:'security', title:'Secure coding', icon:'06', description:'Validation, injection, authz, SSRF and dangerous APIs.' },
-  { id:'ai', title:'AI & MCP', icon:'07', description:'Tool boundaries, RAG, prompt injection and model authority.' }
+  { id:'ai', title:'AI & MCP', icon:'07', description:'Tool boundaries, RAG, prompt injection and model authority.' },
+  { id:'architecture', title:'Architecture & compute', icon:'08', description:'Monoliths, microservices, events, queues, compute models and platform trade-offs.' }
 ];
 
 const P = (id, category, title, source, viz, badJs, goodJs, badPy, goodPy, note, inputs={}) => ({
@@ -35,7 +38,7 @@ const P = (id, category, title, source, viz, badJs, goodJs, badPy, goodPy, note,
   }, note, inputs
 });
 
-export const PATTERNS = [
+const BASE_PATTERNS = [
   // VARIABLES & VALUES
   P('const-first','fundamentals','Prefer stable bindings','mdnStyle','binding',
 `let taxRate = 0.2;
@@ -813,6 +816,8 @@ tool('apply_fix', ...)`,
 # tool: executable action`,
 'MCP distinguishes resources, prompts and tools because control and risk differ across these primitives.')
 ];
+
+export const PATTERNS = [...BASE_PATTERNS, ...ARCHITECTURE_PATTERNS];
 
 export function getPattern(id) { return PATTERNS.find(pattern => pattern.id === id); }
 export function getCategory(id) { return CATEGORIES.find(category => category.id === id); }
