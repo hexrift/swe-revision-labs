@@ -1,18 +1,12 @@
 import { CATEGORIES, PATTERNS, SOURCES, getPattern, getCategory, patternsFor } from './patterns.js';
 import { FINAL_QUIZ } from './quiz.js';
-import { renderCodeVisual } from './visual-models.js';
+import { renderCodeVisual, renderInterviewVisual, renderArchitectureVisual } from './visual-models.js';
+import { createDefaultState, normalizeState, countComfortable, syncStateToRoute } from './state-model.js';
 
 const root = document.querySelector('#app');
 const STORE = 'swe-revision-labs:v7';
 
-const defaults = {
-  language: 'typescript',
-  category: 'fundamentals',
-  current: PATTERNS[0]?.id || '',
-  comfortable: {},
-  inputs: {},
-  quiz: { current: 0, answers: {}, completed: false }
-};
+const defaults = createDefaultState(PATTERNS);
 
 const TRACKS = [
   { title:'Code & runtime', subtitle:'Language, algorithms and concurrency', categories:['fundamentals','functions','classes','collections','algorithms','runtime','concurrency'] },
@@ -83,26 +77,48 @@ const CATEGORY_GUIDES = {
 let state = load();
 
 function load() {
-  try { return { ...defaults, ...JSON.parse(localStorage.getItem(STORE) || '{}') }; }
-  catch { return { ...defaults }; }
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORE) || '{}');
+    return normalizeState(raw, PATTERNS, CATEGORIES, FINAL_QUIZ.length);
+  } catch {
+    return normalizeState(defaults, PATTERNS, CATEGORIES, FINAL_QUIZ.length);
+  }
 }
-function save() { localStorage.setItem(STORE, JSON.stringify(state)); }
+function save() {
+  try {
+    localStorage.setItem(STORE, JSON.stringify(state));
+  } catch (error) {
+    console.warn('Unable to persist revision state', error);
+  }
+}
 function esc(value='') {
   return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 }
 function pct(a,b) { return b ? Math.round(a / b * 100) : 0; }
-function doneCount() { return Object.values(state.comfortable).filter(Boolean).length; }
+function doneCount() { return countComfortable(state, PATTERNS); }
 function route() {
   const raw = location.hash.slice(1) || 'home';
   const [view, id] = raw.split('/');
   return { view, id };
 }
-function go(value) { location.hash = value; }
+function go(value) {
+  const target = '#' + value;
+  if (location.hash === target) {
+    render();
+    return;
+  }
+  location.hash = value;
+}
 function languageLabel() {
   return ({javascript:'JavaScript',typescript:'TypeScript',python:'Python'})[state.language] || 'TypeScript';
 }
 function firstIncomplete() {
   return PATTERNS.find(p => !state.comfortable[p.id]) || PATTERNS[0];
+}
+function resumePattern() {
+  const current = getPattern(state.current);
+  if (current && !state.comfortable[current.id]) return current;
+  return firstIncomplete();
 }
 function nextPattern(pattern) {
   const index = PATTERNS.findIndex(p => p.id === pattern.id);
@@ -164,7 +180,7 @@ function progressStrip() {
 }
 
 function home() {
-  const next = firstIncomplete();
+  const next = resumePattern();
   const cat = getCategory(next.category);
   const categoryCards = TRACKS.map((track,index) => {
     const items = PATTERNS.filter(pattern => track.categories.includes(pattern.category));
@@ -248,12 +264,12 @@ function library() {
   </main>`);
 }
 
-function controlsFor(pattern, values) {
+function controlsFor(pattern, values, scenario='normal') {
   const entries = Object.entries(pattern.inputs || {});
   if (!entries.length) {
     return `<div class="scenario-toggle" role="group" aria-label="Scenario">
-      <button class="active" data-scenario="normal">Normal</button>
-      <button data-scenario="edge">Stress / failure</button>
+      <button class="${scenario==='normal'?'active':''}" data-scenario="normal">Normal</button>
+      <button class="${scenario==='edge'?'active':''}" data-scenario="edge">Stress / failure</button>
     </div>`;
   }
   return entries.map(([key,def]) => {
@@ -301,6 +317,7 @@ function costNumbers(pattern, v) {
 
 function visual(pattern, values, scenario='normal') {
   if (pattern.category === 'architecture') return renderArchitectureVisual(pattern, scenario, esc);
+  if (pattern.interviewModel) return renderInterviewVisual(pattern, scenario, esc);
   return renderCodeVisual(pattern, values, scenario, esc);
 }
 
@@ -330,6 +347,8 @@ function patternView(pattern) {
   const index = PATTERNS.findIndex(p => p.id === pattern.id);
   const next = nextPattern(pattern);
   const comfortable = !!state.comfortable[pattern.id];
+  const scenario = state.scenarios[pattern.id] || 'normal';
+  const mastery = state.mastery[pattern.id] || [false,false,false,false];
   const guide = guideFor(pattern);
 
   return shell(`<main class="page pattern-page">
@@ -369,8 +388,8 @@ function patternView(pattern) {
         <div><p class="kicker">Under the hood</p><h2>${pattern.category==='architecture'?'Change the scenario':'Change the input'}</h2></div>
         <span class="sim-badge">interactive</span>
       </div>
-      <div class="input-panel" id="input-panel">${controlsFor(pattern, values)}</div>
-      <div class="visual-stage" id="visual-stage">${visual(pattern, values)}</div>
+      <div class="input-panel" id="input-panel">${controlsFor(pattern, values, scenario)}</div>
+      <div class="visual-stage" id="visual-stage">${visual(pattern, values, scenario)}</div>
     </section>
 
     <section class="decision-grid reveal">
@@ -406,10 +425,10 @@ function patternView(pattern) {
     <section class="mastery-card reveal">
       <p class="kicker">Leave this lesson able to…</p>
       <div class="mastery-list">
-        <label><input type="checkbox"><span>Explain the problem this pattern addresses without looking at the code.</span></label>
-        <label><input type="checkbox"><span>Predict what changes when load, input size, failure or state changes.</span></label>
-        <label><input type="checkbox"><span>Name at least one situation where the “better” version is not the right choice.</span></label>
-        <label><input type="checkbox"><span>Explain the main trade-off in one or two sentences.</span></label>
+        <label><input type="checkbox" data-mastery-index="0" ${mastery[0]?'checked':''}><span>Explain the problem this pattern addresses without looking at the code.</span></label>
+        <label><input type="checkbox" data-mastery-index="1" ${mastery[1]?'checked':''}><span>Predict what changes when load, input size, failure or state changes.</span></label>
+        <label><input type="checkbox" data-mastery-index="2" ${mastery[2]?'checked':''}><span>Name at least one situation where the “better” version is not the right choice.</span></label>
+        <label><input type="checkbox" data-mastery-index="3" ${mastery[3]?'checked':''}><span>Explain the main trade-off in one or two sentences.</span></label>
       </div>
     </section>
 
@@ -468,12 +487,40 @@ function reviewResults() {
 }
 
 function render() {
+  document.body.classList.remove('drawer-open');
   const r = route();
-  if (r.view === 'library') root.innerHTML = library();
-  else if (r.view === 'pattern') root.innerHTML = patternView(getPattern(r.id) || firstIncomplete());
-  else if (r.view === 'review') root.innerHTML = review();
-  else root.innerHTML = home();
-  bind();
+
+  try {
+    if (syncStateToRoute(state, r, getPattern)) save();
+
+    if (r.view === 'library') root.innerHTML = library();
+    else if (r.view === 'pattern') {
+      const pattern = getPattern(r.id);
+      if (!pattern) {
+        state.current = firstIncomplete().id;
+        save();
+        go('pattern/' + state.current);
+        return;
+      }
+      root.innerHTML = patternView(pattern);
+    }
+    else if (r.view === 'review') root.innerHTML = review();
+    else root.innerHTML = home();
+
+    bind();
+  } catch (error) {
+    console.error('SWE Revision Labs render failed', error);
+    root.innerHTML = `<main class="page"><section class="quiet-card">
+      <p class="kicker">Something went wrong</p>
+      <h2>This lesson could not be rendered.</h2>
+      <p class="lead">The rest of the app is still available. Return home and try another lesson.</p>
+      <button class="primary-action" data-recover-home>Return home</button>
+    </section></main>`;
+    root.querySelector('[data-recover-home]')?.addEventListener('click', () => {
+      location.hash = 'home';
+      render();
+    });
+  }
 }
 
 function openDrawer() {
@@ -486,13 +533,14 @@ function openDrawer() {
   document.body.classList.add('drawer-open');
 }
 function closeDrawer() {
+  document.body.classList.remove('drawer-open');
   const drawer = root.querySelector('[data-drawer]');
   const backdrop = root.querySelector('[data-drawer-backdrop]');
-  if (!drawer || !backdrop) return;
-  drawer.classList.remove('open');
-  backdrop.classList.remove('open');
-  drawer.setAttribute('aria-hidden','true');
-  document.body.classList.remove('drawer-open');
+  if (drawer) {
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden','true');
+  }
+  if (backdrop) backdrop.classList.remove('open');
 }
 
 function bind() {
@@ -546,24 +594,42 @@ function bind() {
         stage.classList.remove('visual-refresh');
         void stage.offsetWidth;
         stage.classList.add('visual-refresh');
-        stage.innerHTML = visual(pattern, getInputValues(pattern));
+        stage.innerHTML = visual(pattern, getInputValues(pattern), state.scenarios[pattern.id] || 'normal');
       }
     }));
     root.querySelectorAll('[data-scenario]').forEach(button => button.addEventListener('click', () => {
+      const scenario = button.dataset.scenario === 'edge' ? 'edge' : 'normal';
+      state.scenarios[pattern.id] = scenario;
+      save();
       root.querySelectorAll('[data-scenario]').forEach(b => b.classList.toggle('active', b === button));
       const stage = root.querySelector('#visual-stage');
       if (stage) {
         stage.classList.remove('visual-refresh');
         void stage.offsetWidth;
         stage.classList.add('visual-refresh');
-        stage.innerHTML = visual(pattern, getInputValues(pattern), button.dataset.scenario);
+        stage.innerHTML = visual(pattern, getInputValues(pattern), scenario);
       }
     }));
+    root.querySelectorAll('[data-mastery-index]').forEach(input => input.addEventListener('change', () => {
+      const index = Number(input.dataset.masteryIndex);
+      const current = state.mastery[pattern.id] || [false,false,false,false];
+      current[index] = input.checked;
+      state.mastery[pattern.id] = current;
+      save();
+    }));
   }
+}
+
+function unregisterLegacyServiceWorkers() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.getRegistrations()
+    .then(registrations => Promise.all(registrations.map(registration => registration.unregister())))
+    .catch(error => console.warn('Unable to unregister legacy service worker', error));
 }
 
 window.addEventListener('hashchange', render);
 window.addEventListener('keydown', event => {
   if (event.key === 'Escape') closeDrawer();
 });
+unregisterLegacyServiceWorkers();
 if (!location.hash) location.hash = 'home'; else render();
