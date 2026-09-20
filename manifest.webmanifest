@@ -3,7 +3,7 @@
   "short_name": "SWE Labs",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#0a0f1d",
-  "theme_color": "#0a0f1d",
-  "description": "Daily software engineering revision labs with interactive visuals and live coding."
+  "background_color": "#f4f4f1",
+  "theme_color": "#f4f4f1",
+  "description": "Focused software engineering revision through sourced poor/better code patterns and interactive visual models."
 }

@@ -1,279 +1,451 @@
-import { TOPICS, LANGUAGES, SOURCES, flatLabs, findLab, findTopic } from './curriculum.js';
-import { getExample, getExercise } from './examples.js';
-import { renderVisual, hydrateVisual } from './visuals.js';
-import { runCode } from './runtime.js';
+import { CATEGORIES, PATTERNS, SOURCES, getPattern, getCategory, patternsFor } from './patterns.js';
 import { FINAL_QUIZ } from './quiz.js';
 
-const STORE_KEY = 'swe-revision-labs:v3';
-const app = document.querySelector('#app');
-const allLabs = flatLabs();
-let editor = null;
-let monacoPromise = null;
+const root = document.querySelector('#app');
+const STORE = 'swe-revision-labs:v7';
 
 const defaults = {
   language: 'typescript',
-  currentLab: 'big-o',
-  step: 0,
+  category: 'fundamentals',
+  current: PATTERNS[0]?.id || '',
   comfortable: {},
-  code: {},
-  sessionMinutes: 20,
-  quiz: { current: 0, answers: {}, completed: false, score: null },
+  inputs: {},
+  quiz: { current: 0, answers: {}, completed: false }
 };
 
-let state = loadState();
+let state = load();
 
-function loadState() {
-  try { return { ...defaults, ...JSON.parse(localStorage.getItem(STORE_KEY) || '{}') }; }
-  catch { return structuredClone(defaults); }
+function load() {
+  try { return { ...defaults, ...JSON.parse(localStorage.getItem(STORE) || '{}') }; }
+  catch { return { ...defaults }; }
 }
-function saveState() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
-function h(s='') { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
-function completedCount() { return Object.values(state.comfortable).filter(Boolean).length; }
-function pct(n,d) { return d ? Math.round((n/d)*100) : 0; }
-function langLabel() { return LANGUAGES.find(l=>l.id===state.language)?.label || 'TypeScript'; }
-function route() { const raw=location.hash.slice(1) || 'home'; const [view,arg]=raw.split('/'); return {view,arg}; }
-function go(hash) { location.hash = hash; }
-function currentLab() { return findLab(state.currentLab) || allLabs[0]; }
-function topicProgress(topic) { const done=topic.labs.filter(l=>state.comfortable[l.id]).length; return {done,total:topic.labs.length,percent:pct(done,topic.labs.length)}; }
-function nextLab(lab) { const i=allLabs.findIndex(x=>x.id===lab.id); return allLabs[i+1] || null; }
-
-function brandSvg(){return `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 6.5h6l2 3h8M4 17.5h6l2-3h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="4" cy="6.5" r="2" fill="currentColor"/><circle cx="20" cy="9.5" r="2" fill="currentColor"/><circle cx="4" cy="17.5" r="2" fill="currentColor"/><circle cx="20" cy="14.5" r="2" fill="currentColor"/></svg>`}
-
-function topbar() {
-  return `<header class="topbar">
-    <div class="brand" data-action="home"><div class="brand-mark">${brandSvg()}</div><div class="brand-copy"><strong>SWE Revision Labs</strong><span>15–30 minutes. One concept at a time.</span></div></div>
-    <div class="topbar-actions">
-      <button class="ghost-btn" data-action="command" title="Jump to a lab">⌘K&nbsp; Jump</button>
-      <button class="ghost-btn" data-action="quiz">Final review</button>
-    </div>
-  </header>`;
+function save() { localStorage.setItem(STORE, JSON.stringify(state)); }
+function esc(value='') {
+  return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 }
-function footer() { return `<footer class="footer"><span>SWE Revision Labs · local-first · no account required</span><span>Monaco 0.56 · TypeScript 6.0.3 runtime · Pyodide 0.29.5</span></footer>`; }
-
-function homeView() {
-  const done=completedCount();
-  const lab=currentLab();
-  const topic=findTopic(lab.topicId);
-  const overall=pct(done,allLabs.length);
-  return `${topbar()}<main class="shell">
-    <div class="home-grid">
-      <section class="hero-card">
-        <div class="eyebrow">Daily software engineering revision</div>
-        <h1 class="hero-title">One lab. One mental model. Then move on.</h1>
-        <p class="hero-sub">Pick a topic and language, learn the concept visually, run code in the browser, and only mark it complete when you can explain the trade-offs without prompts.</p>
-        <div class="hero-actions">
-          <button class="primary-btn" data-open-lab="${h(lab.id)}">${done ? 'Continue' : 'Start'} · ${h(topic?.title || '')} / ${h(lab.title)}</button>
-          <select id="session-minutes" class="select-control" style="width:auto" aria-label="Daily session length">
-            ${[15,20,30].map(m=>`<option value="${m}" ${state.sessionMinutes===m?'selected':''}>${m} min/day</option>`).join('')}
-          </select>
-        </div>
-        <div class="stats-row">
-          <div class="stat"><strong>${done}/${allLabs.length}</strong><span>labs comfortable</span></div>
-          <div class="stat"><strong>${overall}%</strong><span>curriculum confidence</span></div>
-          <div class="stat"><strong>${langLabel()}</strong><span>current code language</span></div>
-        </div>
-      </section>
-      <aside class="sidebar-card">
-        <div class="eyebrow">Your path</div><h3 style="margin-top:10px">Progress is explicit, not inferred</h3>
-        <p>A lab only turns green when you choose <strong>I’m comfortable</strong>. The Next button stays locked until then.</p>
-        <div class="progress-track"><span style="width:${overall}%"></span></div>
-        <p style="font-size:12px">${done===0?'Start anywhere. Complexity is the recommended first track.':`You’ve marked ${done} labs comfortable. Revisit any green lab whenever you want.`}</p>
-        <button class="soft-btn wide" data-action="quiz">Open comprehensive final review</button>
-      </aside>
-    </div>
-
-    <div class="section-head"><div><h2>Choose a topic</h2><p>Each topic is split into focused 15–30 minute labs.</p></div></div>
-    <div class="topic-grid">
-      ${TOPICS.map(topic=>{const p=topicProgress(topic);return `<article class="topic-card" data-topic="${topic.id}">
-        <div class="topic-icon">${topic.icon}</div><h3>${h(topic.title)}</h3><p>${h(topic.description)}</p>
-        <div class="topic-meta"><span>${p.done}/${p.total} comfortable</span><span>${p.percent}%</span></div>
-        <div class="progress-track" style="margin:8px 0 0"><span style="width:${p.percent}%"></span></div>
-      </article>`}).join('')}
-    </div>
-  </main>${footer()}`;
+function pct(a,b) { return b ? Math.round(a / b * 100) : 0; }
+function doneCount() { return Object.values(state.comfortable).filter(Boolean).length; }
+function route() {
+  const raw = location.hash.slice(1) || 'home';
+  const [view, id] = raw.split('/');
+  return { view, id };
+}
+function go(value) { location.hash = value; }
+function languageLabel() {
+  return ({javascript:'JavaScript',typescript:'TypeScript',python:'Python'})[state.language] || 'TypeScript';
+}
+function firstIncomplete() {
+  return PATTERNS.find(p => !state.comfortable[p.id]) || PATTERNS[0];
+}
+function nextPattern(pattern) {
+  const index = PATTERNS.findIndex(p => p.id === pattern.id);
+  return PATTERNS[index + 1] || null;
 }
 
-function sidebar(lab) {
-  const topic=findTopic(lab.topicId);
-  return `<aside class="lab-sidebar">
-    <div class="sidebar-card compact">
-      <label class="select-label">Topic</label>
-      <select id="topic-select" class="select-control">${TOPICS.map(t=>`<option value="${t.id}" ${t.id===lab.topicId?'selected':''}>${h(t.title)}</option>`).join('')}</select>
-      <label class="select-label" style="margin-top:12px">Subtopic</label>
-      <select id="lab-select" class="select-control">${topic.labs.map(x=>`<option value="${x.id}" ${x.id===lab.id?'selected':''}>${h(x.title)}</option>`).join('')}</select>
-      <label class="select-label" style="margin-top:12px">Programming language</label>
-      <select id="lang-select" class="select-control">${LANGUAGES.map(x=>`<option value="${x.id}" ${x.id===state.language?'selected':''}>${x.label}</option>`).join('')}</select>
-    </div>
-    <div class="sidebar-card compact">
-      <div class="eyebrow">${h(topic.title)}</div>
-      <div class="lab-list">${topic.labs.map((x,i)=>`<button data-open-lab="${x.id}" class="${x.id===lab.id?'active':''}"><span class="lab-status-dot ${state.comfortable[x.id]?'done':''}"></span><span>${i+1}. ${h(x.title)}</span></button>`).join('')}</div>
-    </div>
-  </aside>`;
-}
-
-const steps=['Understand','Visualize','Code','Check'];
-function stepper(lab) { return `<nav class="stepper">${steps.map((s,i)=>`<button class="step-btn ${state.step===i?'active':''} ${i<state.step?'done':''}" data-step="${i}">${i<state.step?'✓ ':''}${s}</button>`).join('')}</nav>`; }
-
-function sourceLinks(lab) {
-  const refs=(lab.sources||[]).map(id=>SOURCES[id]).filter(Boolean);
-  if(!refs.length)return '';
-  return `<div class="source-list">${refs.map(s=>`<a class="source-link" href="${s.url}" target="_blank" rel="noreferrer"><span>${h(s.name)}<small>${h(s.kind)}</small></span><span>↗</span></a>`).join('')}</div>`;
-}
-
-function understandStep(lab) {
-  return `<div class="lesson-grid"><div>
-    <section class="content-card"><div class="eyebrow">Mental model</div><h2 style="margin-top:10px">${h(lab.mentalModel || lab.summary)}</h2><p>${h(lab.summary)}</p>
-      <div class="callout"><strong>Explain it clearly:</strong> ${h(lab.tradeoffs || 'State the assumption, the trade-off, and what would make you choose differently.')}</div>
-    </section>
-    <section class="content-card" style="margin-top:14px"><h3>What you should be able to do</h3><ul>${(lab.objectives||[]).map(x=>`<li>${h(x)}</li>`).join('')}</ul></section>
-    <section class="content-card" style="margin-top:14px"><h3>Key ideas</h3><ul>${(lab.bullets||[]).map(x=>`<li>${h(x)}</li>`).join('')}</ul></section>
-  </div><aside>
-    <section class="content-card"><h3>Interview traps</h3>${(lab.traps||[]).map(([t,d])=>`<div class="trap-card" style="margin-top:9px"><strong>${h(t)}</strong><span>${h(d)}</span></div>`).join('')}</section>
-    <section class="content-card" style="margin-top:14px"><h3>Trusted references</h3>${sourceLinks(lab)}</section>
-  </aside></div>`;
-}
-
-function visualStep(lab) { return `<div class="lesson-grid"><section class="visual-shell" id="visual-root">${renderVisual(lab.visual)}</section><section class="content-card"><div class="eyebrow">Use the visual</div><h2 style="margin-top:10px">Explain what changes as load or state grows.</h2><p>Do not memorise the picture. Narrate it: identify the moving part, the invariant, the bottleneck, and the trade-off.</p><div class="callout"><strong>60-second drill:</strong> explain this diagram aloud without using the words “basically”, “just”, or “obviously”. Then name one situation where you would choose a different design.</div><div class="callout warn"><strong>Look beyond the diagram:</strong> state what the diagram deliberately leaves out—failure, data size, tail latency, trust boundaries, or operational cost.</div></section></div>`; }
-
-function codeStep(lab) {
-  const ex=getExample(lab.exampleKind,state.language);
-  const exercise=getExercise(lab.exerciseKind,state.language);
-  const key=`${lab.id}:${state.language}`;
-  const saved=state.code[key] ?? exercise.starter;
-  return `<div>
-    ${ex?`<div class="code-compare"><section class="code-panel bad"><div class="code-panel-head"><span>Bad / risky</span><span>${langLabel()}</span></div><pre class="code">${h(ex.bad)}</pre></section><section class="code-panel good"><div class="code-panel-head"><span>Better</span><span>${langLabel()}</span></div><pre class="code">${h(ex.good)}</pre></section></div><div class="callout" style="margin-top:12px"><strong>Why:</strong> ${h(ex.why)}</div>`:''}
-    <section class="content-card" style="margin-top:16px"><div class="eyebrow">Live lab</div><h3 style="margin-top:8px">${h(exercise.prompt)}</h3><p>The runtime is browser-only. JavaScript/TypeScript execute in a disposable Web Worker with a timeout; Python runs in a disposable Pyodide worker. Network APIs are disabled inside the exercise runtime.</p></section>
-    <div class="editor-wrap" style="margin-top:12px"><div class="editor-main"><div class="editor-toolbar"><div class="editor-toolbar-left"><strong style="font-size:12px">scratch.${state.language==='python'?'py':state.language==='typescript'?'ts':'js'}</strong><span style="color:var(--muted);font-size:11px">${langLabel()}</span></div><div class="editor-toolbar-right"><button class="mini-btn" id="reset-code">Reset</button><button class="mini-btn" id="run-code">Run</button><button class="primary-btn" id="run-tests">Run checks</button></div></div><div class="editor-host" id="editor-host" data-code="${encodeURIComponent(saved)}"></div></div><aside class="terminal"><div class="terminal-head">Output</div><div class="terminal-output" id="terminal-output">Ready. Run your code when you want feedback.</div><div class="runtime-note">First Python run downloads Pyodide once. TypeScript is transpiled locally before execution.</div></aside></div>
+function shell(content, active='learn') {
+  return `<div class="site">
+    <header class="top">
+      <button class="brand" data-nav="home" aria-label="Home">
+        <span class="brand-mark"><i></i><i></i><i></i></span>
+        <span>SWE Revision Labs</span>
+      </button>
+      <button class="menu-button" data-nav="library" aria-label="Open pattern library">☰</button>
+    </header>
+    ${content}
+    <nav class="bottom-nav" aria-label="Primary">
+      <button class="${active==='learn'?'active':''}" data-nav="home"><span>⌂</span>Learn</button>
+      <button class="${active==='patterns'?'active':''}" data-nav="library"><span>▦</span>Patterns</button>
+      <button class="${active==='review'?'active':''}" data-nav="review"><span>✓</span>Review</button>
+    </nav>
   </div>`;
 }
 
-function checkStep(lab) {
-  const checks=[
-    `I can explain “${lab.title}” in plain English without reading notes.`,
-    `I can identify at least one bad implementation or common trap and explain why it fails.`,
-    `I can state the main trade-off and one condition that would change my design choice.`,
-    `I can apply the idea in ${langLabel()} or explain why it is language-agnostic.`,
-  ];
-  return `<div class="lesson-grid"><section class="content-card"><div class="eyebrow">Recall, don’t reread</div><h2 style="margin-top:10px">Can you do these from memory?</h2><div class="check-list">${checks.map((x,i)=>`<label class="check-item" style="display:flex;gap:12px;align-items:flex-start"><input type="checkbox" class="self-check" data-i="${i}" style="margin-top:4px"><span>${h(x)}</span></label>`).join('')}</div><div class="callout warn"><strong>Do not mark comfortable because the page feels familiar.</strong> Mark it when you can reproduce the mental model and defend a trade-off without looking.</div></section><aside class="content-card"><h3>Interview answer frame</h3><ol style="color:#b9c6d9;line-height:1.8;padding-left:22px"><li>Define the inputs / constraints.</li><li>Name the mechanism or invariant.</li><li>State time, space, consistency, or failure properties precisely.</li><li>Name the important assumption.</li><li>Give the trade-off and alternative.</li></ol><div class="callout"><strong>Your one-line summary:</strong><br>${h(lab.tradeoffs || lab.summary)}</div></aside></div>`;
+function progressStrip() {
+  const done = doneCount();
+  return `<div class="progress-strip" aria-label="${done} of ${PATTERNS.length} comfortable">
+    <div class="progress-label"><span>Progress</span><strong>${done}/${PATTERNS.length}</strong></div>
+    <div class="progress-line"><span style="width:${pct(done,PATTERNS.length)}%"></span></div>
+  </div>`;
 }
 
-function labView(lab) {
-  const topic=findTopic(lab.topicId); const comfortable=!!state.comfortable[lab.id]; const next=nextLab(lab);
-  const stepContent=[understandStep,visualStep,codeStep,checkStep][state.step](lab);
-  return `${topbar()}<main class="shell"><div class="lab-layout">${sidebar(lab)}<section class="lab-stage">
-    <header class="lab-header"><div class="lab-breadcrumb">${h(topic.title)} · Lab ${topic.labs.findIndex(x=>x.id===lab.id)+1} of ${topic.labs.length}</div><div class="lab-title-row"><div><h1>${h(lab.title)}</h1><p>${h(lab.summary)}</p></div><span class="lab-pill">≈ ${lab.minutes || 20} min · ${h(lab.difficulty || 'Advanced')}</span></div></header>
-    ${stepper(lab)}<div class="stage-body">${stepContent}</div>
-    <footer class="lab-footer"><div class="comfort"><button class="comfort-check ${comfortable?'on':''}" data-action="comfortable">${comfortable?'✓':'○'}</button><span>${comfortable?'Comfortable — revisit any time':'Not marked comfortable yet'}</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ghost-btn" data-action="prev-step" ${state.step===0?'disabled':''}>← Previous</button>${state.step<3?`<button class="primary-btn" data-action="next-step">Next step →</button>`:`<button class="primary-btn" data-action="complete-next" ${comfortable?'':'disabled'}>${next?'Next lab →':'Curriculum complete →'}</button>`}</div></footer>
-  </section></div></main>${footer()}`;
+function home() {
+  const next = firstIncomplete();
+  const cat = getCategory(next.category);
+  const categoryCards = CATEGORIES.map(category => {
+    const items = patternsFor(category.id);
+    const done = items.filter(p => state.comfortable[p.id]).length;
+    return `<button class="category-card" data-category="${category.id}">
+      <span class="category-number">${category.icon}</span>
+      <span class="category-copy"><strong>${esc(category.title)}</strong><small>${esc(category.description)}</small></span>
+      <span class="category-progress">${done}/${items.length}</span>
+    </button>`;
+  }).join('');
+
+  return shell(`<main class="page home-page">
+    <section class="intro">
+      <div>
+        <p class="kicker">15–30 minutes</p>
+        <h1>Small lessons.<br>Clear mental models.</h1>
+        <p class="lead">Compare code, change the inputs, and watch what the runtime or system is doing underneath.</p>
+      </div>
+      ${progressStrip()}
+    </section>
+
+    <section class="today-card">
+      <div class="today-top">
+        <div>
+          <span class="pill">Continue</span>
+          <h2>${esc(next.title)}</h2>
+          <p>${esc(cat?.title || '')} · ${languageLabel()}</p>
+        </div>
+        <span class="arrow">→</span>
+      </div>
+      <div class="mini-flow" aria-hidden="true">
+        <span>input</span><b>→</b><span>code</span><b>→</b><span>under the hood</span>
+      </div>
+      <button class="primary-action" data-pattern="${next.id}">Open lesson</button>
+    </section>
+
+    <section class="section">
+      <div class="section-title"><h2>Topics</h2><button data-nav="library">See all</button></div>
+      <div class="category-list">${categoryCards}</div>
+    </section>
+
+    <section class="quiet-card">
+      <p class="kicker">How it works</p>
+      <div class="three-steps">
+        <div><span>1</span><strong>Compare</strong><small>Poor vs better code.</small></div>
+        <div><span>2</span><strong>Change</strong><small>Adjust real inputs.</small></div>
+        <div><span>3</span><strong>See</strong><small>Watch work, state or flow change.</small></div>
+      </div>
+    </section>
+  </main>`, 'learn');
 }
 
-function quizView() {
-  const qstate=state.quiz || defaults.quiz; const idx=Math.min(qstate.current || 0, FINAL_QUIZ.length-1); const q=FINAL_QUIZ[idx]; const answered=Object.keys(qstate.answers||{}).length;
-  if(qstate.completed) return quizResults();
-  return `${topbar()}<main class="shell"><div class="quiz-layout"><section class="quiz-card"><div class="eyebrow">Comprehensive final review</div><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><h2 style="margin:10px 0 0">Question ${idx+1} of ${FINAL_QUIZ.length}</h2><span class="lab-pill">${h(findTopic(q.topic)?.title || q.topic)}</span></div><div class="quiz-question">${h(q.question)}</div><div class="quiz-options">${q.options.map((o,i)=>`<button class="quiz-option ${qstate.answers[idx]===i?'selected':''}" data-quiz-answer="${i}">${String.fromCharCode(65+i)}. ${h(o)}</button>`).join('')}</div><div class="quiz-nav"><button class="ghost-btn" data-quiz-nav="${idx-1}" ${idx===0?'disabled':''}>← Previous</button>${idx===FINAL_QUIZ.length-1?`<button class="primary-btn" data-action="submit-quiz" ${answered<FINAL_QUIZ.length?'disabled':''}>Finish & score</button>`:`<button class="primary-btn" data-quiz-nav="${idx+1}">Next →</button>`}</div></section><aside class="sidebar-card"><h3>Progress</h3><p>${answered}/${FINAL_QUIZ.length} answered. Your answers are saved locally.</p><div class="progress-track"><span style="width:${pct(answered,FINAL_QUIZ.length)}%"></span></div><div class="question-map">${FINAL_QUIZ.map((_,i)=>`<button class="question-dot ${qstate.answers[i]!==undefined?'answered':''} ${i===idx?'active':''}" data-quiz-nav="${i}">${i+1}</button>`).join('')}</div><div class="callout" style="margin-top:14px">This is a fixed 48-question bank: four questions across each of the 12 core SWE domains.</div><button class="danger-btn" data-action="reset-quiz">Reset final review</button></aside></div></main>${footer()}`;
+function library() {
+  const selected = getCategory(state.category) || CATEGORIES[0];
+  const tabs = CATEGORIES.map(c => `<button class="topic-chip ${c.id===selected.id?'active':''}" data-category="${c.id}">${esc(c.title)}</button>`).join('');
+  const items = patternsFor(selected.id);
+  const cards = items.map((p,index) => {
+    const source = SOURCES[p.source];
+    return `<button class="pattern-row" data-pattern="${p.id}">
+      <span class="pattern-index">${String(index+1).padStart(2,'0')}</span>
+      <span class="pattern-main">
+        <strong>${esc(p.title)}</strong>
+        <small>${esc(source?.label || '')}</small>
+      </span>
+      <span class="status-dot ${state.comfortable[p.id]?'done':''}">${state.comfortable[p.id]?'✓':''}</span>
+    </button>`;
+  }).join('');
+
+  return shell(`<main class="page library-page">
+    <section class="library-head">
+      <p class="kicker">${PATTERNS.length} curated examples</p>
+      <h1>Code patterns</h1>
+      <p class="lead">Poor and better versions, adapted from reputable engineering guidance and standards.</p>
+    </section>
+    <div class="topic-scroller">${tabs}</div>
+    <section class="pattern-list">
+      <div class="list-head"><strong>${esc(selected.title)}</strong><span>${items.length} examples</span></div>
+      ${cards}
+    </section>
+  </main>`, 'patterns');
 }
 
-function quizResults() {
-  const answers=state.quiz.answers||{}; let correct=0; const byTopic={};
-  FINAL_QUIZ.forEach((q,i)=>{const ok=answers[i]===q.answer; if(ok)correct++; byTopic[q.topic]??={correct:0,total:0}; byTopic[q.topic].total++; if(ok)byTopic[q.topic].correct++;});
-  const score=pct(correct,FINAL_QUIZ.length);
-  return `${topbar()}<main class="shell"><section class="hero-card"><div class="eyebrow">Final review complete</div><h1 class="hero-title">${score}%</h1><p class="hero-sub">${correct} of ${FINAL_QUIZ.length} correct. Use the domain breakdown to decide what to revisit; this score is revision evidence, not a hiring verdict.</p><div class="hero-actions"><button class="primary-btn" data-action="reset-quiz">Retake fixed review</button><button class="ghost-btn" data-action="home">Back to labs</button></div></section><div class="section-head"><div><h2>Domain breakdown</h2><p>Open weak domains from the home screen and mark labs comfortable only after recall improves.</p></div></div><div class="topic-grid">${TOPICS.map(t=>{const b=byTopic[t.id]||{correct:0,total:0};return `<article class="topic-card" data-topic="${t.id}"><div class="topic-icon">${t.icon}</div><h3>${h(t.title)}</h3><p>${b.correct}/${b.total} correct</p><div class="progress-track"><span style="width:${pct(b.correct,b.total)}%"></span></div></article>`}).join('')}</div><div class="section-head"><div><h2>Review answers</h2></div></div><div style="display:grid;gap:10px">${FINAL_QUIZ.map((q,i)=>{const ok=answers[i]===q.answer;return `<section class="content-card"><div class="eyebrow" style="color:${ok?'var(--good)':'var(--bad)'}">${ok?'Correct':'Revisit'} · ${h(findTopic(q.topic)?.title||q.topic)}</div><h3 style="margin-top:8px">${h(q.question)}</h3><p><strong>Your answer:</strong> ${h(q.options[answers[i]] ?? 'No answer')}<br><strong>Best answer:</strong> ${h(q.options[q.answer])}</p><div class="callout">${h(q.explanation)}</div></section>`}).join('')}</div></main>${footer()}`;
+function controlsFor(pattern, values) {
+  const entries = Object.entries(pattern.inputs || {});
+  if (!entries.length) {
+    return `<div class="scenario-toggle" role="group" aria-label="Scenario">
+      <button class="active" data-scenario="normal">Normal</button>
+      <button data-scenario="edge">Edge case</button>
+    </div>`;
+  }
+  return entries.map(([key,def]) => {
+    if (typeof def === 'number') {
+      const max = Math.max(def * 5, def + 10, 20);
+      const min = 1;
+      return `<label class="input-control">
+        <span><b>${esc(key)}</b><output data-output="${key}">${values[key] ?? def}</output></span>
+        <input type="range" min="${min}" max="${max}" value="${values[key] ?? def}" data-input="${key}">
+      </label>`;
+    }
+    return `<label class="text-control">
+      <span>${esc(key)}</span>
+      <input type="text" value="${esc(values[key] ?? def)}" data-input="${key}">
+    </label>`;
+  }).join('');
+}
+
+function getInputValues(pattern) {
+  const existing = state.inputs[pattern.id] || {};
+  const result = {};
+  for (const [key,def] of Object.entries(pattern.inputs || {})) result[key] = existing[key] ?? def;
+  return result;
+}
+
+function logScale(value, maxValue) {
+  if (value <= 0 || maxValue <= 0) return 0;
+  return Math.max(4, Math.min(100, Math.log10(value + 1) / Math.log10(maxValue + 1) * 100));
+}
+
+function costNumbers(pattern, v) {
+  const n = Number(v.n || v.items || v.rows || v.messages || 100);
+  const m = Number(v.m || n);
+  const q = Number(v.lookups || v.queries || 1);
+  switch (pattern.id) {
+    case 'membership-set': return { bad:n*m, good:n+m, label:'comparisons / indexing work' };
+    case 'queue-front': return { bad:n*(n+1)/2, good:n, label:'element moves / reads' };
+    case 'repeated-copy': return { bad:n*(n+1)/2, good:n, label:'elements copied / appended' };
+    case 'sort-once': return { bad:q*n*Math.log2(Math.max(n,2)), good:n*Math.log2(Math.max(n,2))+q, label:'comparison work' };
+    case 'map-for-keyed': return { bad:n*q, good:n+q, label:'lookup work' };
+    case 'dedupe-set': return { bad:n*(n+1)/2, good:n, label:'membership work' };
+    case 'regex-dos': return { bad:Math.pow(2,Math.min(n,30)), good:n, label:'illustrative work units' };
+    default: return { bad:n*n, good:n, label:'illustrative work units' };
+  }
+}
+
+function visual(pattern, values, scenario='normal') {
+  const kind = pattern.viz;
+  if (kind === 'cost') {
+    const c = costNumbers(pattern, values);
+    const max = Math.max(c.bad,c.good);
+    return `<div class="viz-caption"><strong>${esc(c.label)}</strong><span>Illustrative, not a benchmark</span></div>
+      <div class="bar-compare">
+        <div><span>Poor</span><b style="width:${logScale(c.bad,max)}%"></b><em>${Math.round(c.bad).toLocaleString()}</em></div>
+        <div><span>Better</span><b style="width:${logScale(c.good,max)}%"></b><em>${Math.round(c.good).toLocaleString()}</em></div>
+      </div>
+      <p class="viz-note">As the input grows, the repeated operation is what changes the shape of the cost.</p>`;
+  }
+  if (kind === 'allocation') {
+    const n = Number(values.n || 100);
+    const bad = Math.round(n*(n+1)/2);
+    return `<div class="memory-visual">
+      <div><span>Poor</span><div class="memory-cells">${Array.from({length:12},(_,i)=>`<i class="${i<11?'filled':''}"></i>`).join('')}</div><strong>~${bad.toLocaleString()} copied items</strong></div>
+      <div><span>Better</span><div class="memory-cells">${Array.from({length:12},(_,i)=>`<i class="${i<4?'filled':''}"></i>`).join('')}</div><strong>~${n.toLocaleString()} appends</strong></div>
+    </div><p class="viz-note">The poor version repeatedly allocates a new growing container.</p>`;
+  }
+  if (kind === 'timeline') {
+    const task = Number(values.taskMs || 100);
+    const items = Number(values.items || 3);
+    const limit = Number(values.limit || Math.min(3,items));
+    const serial = task * items;
+    const parallel = task * Math.ceil(items / Math.max(limit,1));
+    return `<div class="timeline">
+      <div class="timeline-row"><span>Poor</span><div class="track">${Array.from({length:Math.min(items,8)},(_,i)=>`<i style="left:${i*(100/Math.min(items,8))}%;width:${100/Math.min(items,8)}%"></i>`).join('')}</div><b>~${serial} ms</b></div>
+      <div class="timeline-row"><span>Better</span><div class="track compact">${Array.from({length:Math.min(items,8)},(_,i)=>`<i style="left:${(i%limit)*(100/limit)}%;top:${Math.floor(i/limit)*8}px;width:${100/limit}%"></i>`).join('')}</div><b>~${parallel} ms</b></div>
+    </div><p class="viz-note">Illustrative wall-clock model for independent tasks. Real latency includes scheduling and downstream limits.</p>`;
+  }
+  if (kind === 'recursion') {
+    const n = Number(values.n || 12);
+    const calls = Math.min(1000000, Math.round(Math.pow(1.618,n)));
+    return `<div class="recursion-grid">
+      <div><span>Poor</span><strong>${calls.toLocaleString()}</strong><small>repeated recursive calls</small><div class="tree">${Array.from({length:15},(_,i)=>`<i style="--i:${i}"></i>`).join('')}</div></div>
+      <div><span>Better</span><strong>${n+1}</strong><small>distinct states cached</small><div class="state-row">${Array.from({length:Math.min(n+1,12)},()=>'<i></i>').join('')}</div></div>
+    </div>`;
+  }
+  if (kind === 'network') {
+    const n = Number(values.n || 50);
+    const latency = Number(values.latency || 20);
+    return `<div class="request-stack">
+      <div class="request-bad"><span>1</span>${Array.from({length:Math.min(n,9)},(_,i)=>`<i>${i+2}</i>`).join('')}<b>≈ ${(n+1)*latency} ms serial latency</b></div>
+      <div class="request-good"><span>1</span><i>2</i><b>≈ 2 round trips</b></div>
+    </div><p class="viz-note">N+1 is often a network problem before it is a CPU problem.</p>`;
+  }
+  if (kind === 'protocol') {
+    const failures = Number(values.failures || values.retries || 2);
+    return `<div class="protocol-flow">
+      <div class="lane"><strong>Poor</strong><span>client</span><b>→</b><span>request</span><b>→</b><span class="danger">retry × ${failures+1}</span></div>
+      <div class="lane"><strong>Better</strong><span>client</span><b>→</b><span>policy</span><b>→</b><span class="safe">bounded action</span></div>
+    </div><p class="viz-note">Protocol correctness is often about what happens after timeout, retry, reconnect or duplication.</p>`;
+  }
+  if (kind === 'agent') {
+    return `<div class="agent-flow">
+      <div class="agent-node">Untrusted input</div><b>→</b><div class="agent-node">Model</div><b>→</b><div class="agent-node boundary">Policy boundary</div><b>→</b><div class="agent-node action">Tool / state</div>
+    </div><div class="authority-note">${scenario==='edge'?'Edge case: the model proposes a high-impact or adversarial action. Deterministic policy still owns authority.':'Normal case: model output is a proposal. Validation and authorization still happen outside the model.'}</div>`;
+  }
+  if (kind === 'boundary') {
+    const raw = Object.values(values)[0] || (scenario==='edge' ? "unexpected / hostile input" : "normal input");
+    return `<div class="boundary-viz">
+      <div class="boundary-input"><small>input</small><strong>${esc(raw)}</strong></div>
+      <div class="boundary-path bad"><span>poor</span><b>→</b><em>trusted immediately</em><b>→</b><strong>sink</strong></div>
+      <div class="boundary-path good"><span>better</span><b>→</b><em>parse + validate + authorize</em><b>→</b><strong>sink</strong></div>
+    </div>`;
+  }
+  if (kind === 'state' || kind === 'binding' || kind === 'scope' || kind === 'object') {
+    return `<div class="object-viz">
+      <div class="object-card"><small>caller</small><strong>A</strong></div><b>→</b>
+      <div class="object-card shared"><small>state</small><strong>${kind==='binding'?'binding':'object'}</strong><span>${scenario==='edge'?'changed unexpectedly':'explicit ownership'}</span></div><b>→</b>
+      <div class="object-card"><small>result</small><strong>B</strong></div>
+    </div><p class="viz-note">The key question is who owns the state and who is allowed to change it.</p>`;
+  }
+  return `<div class="flow-viz">
+    <div class="flow-row bad"><span>Poor</span><i>input</i><b>→</b><i>hidden step</i><b>→</b><i>surprise</i></div>
+    <div class="flow-row good"><span>Better</span><i>input</i><b>→</b><i>explicit step</i><b>→</b><i>clear result</i></div>
+  </div>`;
+}
+
+function patternView(pattern) {
+  const category = getCategory(pattern.category);
+  const source = SOURCES[pattern.source];
+  const values = getInputValues(pattern);
+  const code = pattern.code[state.language] || pattern.code.javascript;
+  const index = PATTERNS.findIndex(p => p.id === pattern.id);
+  const next = nextPattern(pattern);
+  const comfortable = !!state.comfortable[pattern.id];
+
+  return shell(`<main class="page pattern-page">
+    <section class="pattern-head">
+      <button class="back-link" data-nav="library">← Patterns</button>
+      <div class="pattern-position">${index+1} / ${PATTERNS.length}</div>
+      <p class="kicker">${esc(category?.title || '')}</p>
+      <h1>${esc(pattern.title)}</h1>
+      <p class="lead">${esc(pattern.note)}</p>
+      <div class="language-switch" role="group" aria-label="Programming language">
+        ${['typescript','javascript','python'].map(lang=>`<button data-language="${lang}" class="${state.language===lang?'active':''}">${({typescript:'TS',javascript:'JS',python:'PY'})[lang]}</button>`).join('')}
+      </div>
+    </section>
+
+    <section class="code-story">
+      <article class="code-card poor">
+        <header><span>Poor</span><small>more risk / work / ambiguity</small></header>
+        <pre><code>${esc(code.bad)}</code></pre>
+      </article>
+      <div class="story-arrow">↓</div>
+      <article class="code-card better">
+        <header><span>Better</span><small>clearer intent and trade-offs</small></header>
+        <pre><code>${esc(code.good)}</code></pre>
+      </article>
+    </section>
+
+    <section class="sim-card">
+      <div class="sim-head">
+        <div><p class="kicker">Under the hood</p><h2>Change the input</h2></div>
+        <span class="sim-badge">interactive</span>
+      </div>
+      <div class="input-panel" id="input-panel">${controlsFor(pattern, values)}</div>
+      <div class="visual-stage" id="visual-stage">${visual(pattern, values)}</div>
+    </section>
+
+    <section class="source-card">
+      <div><p class="kicker">Source</p><strong>${esc(source?.label || 'Reference')}</strong></div>
+      <a href="${source?.url || '#'}" target="_blank" rel="noreferrer">Open ↗</a>
+    </section>
+
+    <section class="lesson-actions">
+      <button class="comfort-button ${comfortable?'on':''}" data-comfort="${pattern.id}">
+        <span>${comfortable?'✓':'○'}</span>
+        <b>${comfortable?'Comfortable':'Mark comfortable'}</b>
+      </button>
+      ${next ? `<button class="next-button" data-pattern="${next.id}" ${comfortable?'':'disabled'}>Next pattern →</button>` : `<button class="next-button" data-nav="review" ${comfortable?'':'disabled'}>Review →</button>`}
+    </section>
+  </main>`, 'patterns');
+}
+
+function review() {
+  const q = state.quiz || defaults.quiz;
+  if (q.completed) return reviewResults();
+  const index = Math.min(q.current || 0, FINAL_QUIZ.length-1);
+  const item = FINAL_QUIZ[index];
+  const answer = q.answers[index];
+  return shell(`<main class="page review-page">
+    <section class="review-head">
+      <p class="kicker">Fixed comprehensive review</p>
+      <h1>Question ${index+1}</h1>
+      <p>${index+1} of ${FINAL_QUIZ.length}</p>
+      <div class="progress-line"><span style="width:${pct(index+1,FINAL_QUIZ.length)}%"></span></div>
+    </section>
+    <section class="question-card">
+      <small>${esc(getCategory(item.topic)?.title || item.topic)}</small>
+      <h2>${esc(item.question)}</h2>
+      <div class="answers">
+        ${item.options.map((option,i)=>`<button class="${answer===i?'selected':''}" data-answer="${i}"><span>${String.fromCharCode(65+i)}</span>${esc(option)}</button>`).join('')}
+      </div>
+      <div class="review-nav">
+        <button data-question="${Math.max(0,index-1)}" ${index===0?'disabled':''}>←</button>
+        ${index === FINAL_QUIZ.length-1
+          ? `<button class="primary-action" data-submit ${Object.keys(q.answers||{}).length<FINAL_QUIZ.length?'disabled':''}>Finish</button>`
+          : `<button class="primary-action" data-question="${index+1}">Next →</button>`}
+      </div>
+    </section>
+  </main>`, 'review');
+}
+
+function reviewResults() {
+  let correct = 0;
+  FINAL_QUIZ.forEach((item,index)=>{ if (state.quiz.answers[index] === item.answer) correct++; });
+  const score = pct(correct,FINAL_QUIZ.length);
+  return shell(`<main class="page review-page">
+    <section class="result-card">
+      <p class="kicker">Review complete</p>
+      <strong>${score}%</strong>
+      <h1>${correct} / ${FINAL_QUIZ.length}</h1>
+      <p>Use this as a revision signal. Reopen any topic where recall felt slow or uncertain.</p>
+      <button class="primary-action" data-reset-review>Reset review</button>
+    </section>
+  </main>`, 'review');
 }
 
 function render() {
-  disposeEditor();
-  const r=route();
-  if(r.view==='lab') { const lab=findLab(r.arg)||currentLab(); state.currentLab=lab.id; saveState(); app.innerHTML=labView(lab); hydrateAfterRender(lab); }
-  else if(r.view==='quiz') { app.innerHTML=quizView(); hydrateCommon(); }
-  else { app.innerHTML=homeView(); hydrateCommon(); }
+  const r = route();
+  if (r.view === 'library') root.innerHTML = library();
+  else if (r.view === 'pattern') root.innerHTML = patternView(getPattern(r.id) || firstIncomplete());
+  else if (r.view === 'review') root.innerHTML = review();
+  else root.innerHTML = home();
+  bind();
 }
 
-function hydrateCommon() {
-  app.querySelectorAll('[data-action="home"]').forEach(el=>el.onclick=()=>go('home'));
-  app.querySelectorAll('[data-action="quiz"]').forEach(el=>el.onclick=()=>go('quiz'));
-  app.querySelectorAll('[data-action="command"]').forEach(el=>el.onclick=openCommand);
-  app.querySelectorAll('[data-open-lab]').forEach(el=>el.onclick=()=>{state.currentLab=el.dataset.openLab;state.step=0;saveState();go(`lab/${el.dataset.openLab}`)});
-  app.querySelectorAll('[data-topic]').forEach(el=>el.onclick=()=>{const t=findTopic(el.dataset.topic);if(t?.labs[0]){state.currentLab=t.labs[0].id;state.step=0;saveState();go(`lab/${t.labs[0].id}`)}});
-  app.querySelector('#session-minutes')?.addEventListener('change',e=>{state.sessionMinutes=Number(e.target.value);saveState()});
-  app.querySelectorAll('[data-quiz-nav]').forEach(el=>el.onclick=()=>{state.quiz.current=Number(el.dataset.quizNav);saveState();render()});
-  app.querySelectorAll('[data-quiz-answer]').forEach(el=>el.onclick=()=>{state.quiz.answers[state.quiz.current]=Number(el.dataset.quizAnswer);saveState();render()});
-  app.querySelectorAll('[data-action="reset-quiz"]').forEach(el=>el.onclick=()=>{state.quiz={current:0,answers:{},completed:false,score:null};saveState();render()});
-  app.querySelector('[data-action="submit-quiz"]')?.addEventListener('click',()=>{const answers=state.quiz.answers;let c=0;FINAL_QUIZ.forEach((q,i)=>{if(answers[i]===q.answer)c++});state.quiz.completed=true;state.quiz.score=pct(c,FINAL_QUIZ.length);saveState();render()});
-}
-
-function hydrateAfterRender(lab) {
-  hydrateCommon();
-  const topicSelect=app.querySelector('#topic-select');
-  if(topicSelect) topicSelect.onchange=()=>{const t=findTopic(topicSelect.value);if(t?.labs[0]){state.currentLab=t.labs[0].id;state.step=0;saveState();go(`lab/${t.labs[0].id}`)}};
-  const labSelect=app.querySelector('#lab-select'); if(labSelect) labSelect.onchange=()=>{state.currentLab=labSelect.value;state.step=0;saveState();go(`lab/${labSelect.value}`)};
-  const langSelect=app.querySelector('#lang-select'); if(langSelect) langSelect.onchange=()=>{state.language=langSelect.value;saveState();render()};
-  app.querySelectorAll('[data-step]').forEach(el=>el.onclick=()=>{state.step=Number(el.dataset.step);saveState();render()});
-  app.querySelector('[data-action="next-step"]')?.addEventListener('click',()=>{state.step=Math.min(3,state.step+1);saveState();render()});
-  app.querySelector('[data-action="prev-step"]')?.addEventListener('click',()=>{state.step=Math.max(0,state.step-1);saveState();render()});
-  app.querySelector('[data-action="comfortable"]')?.addEventListener('click',()=>{state.comfortable[lab.id]=!state.comfortable[lab.id];saveState();render()});
-  app.querySelector('[data-action="complete-next"]')?.addEventListener('click',()=>{if(!state.comfortable[lab.id])return;const n=nextLab(lab);if(n){state.currentLab=n.id;state.step=0;saveState();go(`lab/${n.id}`)}else go('quiz')});
-  if(state.step===1) hydrateVisual(app.querySelector('#visual-root'),lab.visual);
-  if(state.step===2) hydrateEditor(lab);
-}
-
-function ensureMonaco() {
-  if(window.monaco) return Promise.resolve(window.monaco);
-  if(monacoPromise) return monacoPromise;
-  monacoPromise=new Promise((resolve,reject)=>{
-    if(!window.require){reject(new Error('Monaco loader unavailable'));return;}
-    window.MonacoEnvironment={ getWorkerUrl:()=>`data:text/javascript;charset=utf-8,${encodeURIComponent(`self.MonacoEnvironment={baseUrl:'https://cdn.jsdelivr.net/npm/monaco-editor@0.56.0/min/'};importScripts('https://cdn.jsdelivr.net/npm/monaco-editor@0.56.0/min/vs/base/worker/workerMain.js');`)}` };
-    window.require.config({paths:{vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.56.0/min/vs'}});
-    window.require(['vs/editor/editor.main'],()=>resolve(window.monaco),reject);
+function bind() {
+  root.querySelectorAll('[data-nav]').forEach(el => el.addEventListener('click', () => go(el.dataset.nav)));
+  root.querySelectorAll('[data-category]').forEach(el => el.addEventListener('click', () => {
+    state.category = el.dataset.category; save(); go('library');
+  }));
+  root.querySelectorAll('[data-pattern]').forEach(el => el.addEventListener('click', () => {
+    state.current = el.dataset.pattern; save(); go('pattern/' + el.dataset.pattern);
+  }));
+  root.querySelectorAll('[data-language]').forEach(el => el.addEventListener('click', () => {
+    state.language = el.dataset.language; save(); render();
+  }));
+  root.querySelectorAll('[data-comfort]').forEach(el => el.addEventListener('click', () => {
+    const id = el.dataset.comfort;
+    state.comfortable[id] = !state.comfortable[id];
+    save(); render();
+  }));
+  root.querySelectorAll('[data-answer]').forEach(el => el.addEventListener('click', () => {
+    state.quiz.answers[state.quiz.current || 0] = Number(el.dataset.answer);
+    save(); render();
+  }));
+  root.querySelectorAll('[data-question]').forEach(el => el.addEventListener('click', () => {
+    state.quiz.current = Number(el.dataset.question); save(); render();
+  }));
+  root.querySelector('[data-submit]')?.addEventListener('click', () => {
+    state.quiz.completed = true; save(); render();
   });
-  return monacoPromise;
-}
+  root.querySelector('[data-reset-review]')?.addEventListener('click', () => {
+    state.quiz = { current:0, answers:{}, completed:false }; save(); render();
+  });
 
-function disposeEditor(){ if(editor){try{editor.dispose()}catch{} editor=null;} document.querySelectorAll('[data-timer]').forEach(el=>{try{clearInterval(Number(el.dataset.timer))}catch{}}); }
-
-async function hydrateEditor(lab) {
-  const host=app.querySelector('#editor-host'); if(!host)return;
-  const exercise=getExercise(lab.exerciseKind,state.language); const key=`${lab.id}:${state.language}`; let value=decodeURIComponent(host.dataset.code||'');
-  try {
-    const monaco=await ensureMonaco(); if(!document.body.contains(host))return;
-    editor=monaco.editor.create(host,{value,language:state.language==='python'?'python':state.language==='typescript'?'typescript':'javascript',theme:'vs-dark',fontSize:13,lineHeight:22,minimap:{enabled:false},automaticLayout:true,scrollBeyondLastLine:false,padding:{top:14,bottom:14},fontLigatures:true});
-    editor.onDidChangeModelContent(()=>{state.code[key]=editor.getValue();saveState()});
-  } catch {
-    host.innerHTML=`<textarea class="editor-fallback">${h(value)}</textarea>`; const ta=host.querySelector('textarea'); ta.oninput=()=>{state.code[key]=ta.value;saveState()};
+  const patternRoute = route();
+  if (patternRoute.view === 'pattern') {
+    const pattern = getPattern(patternRoute.id) || firstIncomplete();
+    const inputs = root.querySelectorAll('[data-input]');
+    inputs.forEach(input => input.addEventListener('input', () => {
+      const key = input.dataset.input;
+      const value = input.type === 'range' ? Number(input.value) : input.value;
+      state.inputs[pattern.id] ||= {};
+      state.inputs[pattern.id][key] = value;
+      save();
+      const out = root.querySelector('[data-output="' + key + '"]');
+      if (out) out.textContent = String(value);
+      const stage = root.querySelector('#visual-stage');
+      if (stage) stage.innerHTML = visual(pattern, getInputValues(pattern));
+    }));
+    root.querySelectorAll('[data-scenario]').forEach(button => button.addEventListener('click', () => {
+      root.querySelectorAll('[data-scenario]').forEach(b => b.classList.toggle('active', b === button));
+      const stage = root.querySelector('#visual-stage');
+      if (stage) stage.innerHTML = visual(pattern, getInputValues(pattern), button.dataset.scenario);
+    }));
   }
-  const getValue=()=>editor?.getValue() ?? host.querySelector('textarea')?.value ?? value;
-  const terminal=app.querySelector('#terminal-output');
-  const execute=async(mode)=>{
-    const isCheck=mode==='checks';
-    const tests=isCheck ? (exercise.tests||'') : '';
-    if(isCheck && !tests.trim()){
-      terminal.innerHTML='<span class="err">NO CHECKS CONFIGURED</span>\nThis exercise has no correctness checks, so it cannot be marked PASS.';
-      return;
-    }
-    terminal.innerHTML=isCheck?'Running checks…':'Running…';
-    const result=await runCode(state.language,getValue(),tests,{mode});
-    const label=isCheck
-      ? (result.ok?'ALL CHECKS PASSED':'CHECKS FAILED')
-      : (result.ok?'EXECUTED':'ERROR');
-    const detail=result.output || (isCheck && result.ok
-      ? 'All configured checks completed successfully.'
-      : (!isCheck && result.ok ? 'Program completed. No correctness checks were run.' : ''));
-    terminal.innerHTML=`<span class="${result.ok?'ok':'err'}">${h(label)}</span>\n${h(detail)}${result.error?'\n'+h(result.error):''}`;
-  };
-  app.querySelector('#run-code').onclick=()=>execute('run');
-  app.querySelector('#run-tests').onclick=()=>execute('checks');
-  app.querySelector('#reset-code').onclick=()=>{state.code[key]=exercise.starter;saveState();if(editor)editor.setValue(exercise.starter);else if(host.querySelector('textarea'))host.querySelector('textarea').value=exercise.starter;terminal.textContent='Reset to starter code.'};
 }
 
-function openCommand() {
-  if(document.querySelector('.command-overlay'))return;
-  const wrap=document.createElement('div');wrap.className='command-overlay';wrap.innerHTML=`<div class="command-box"><input class="command-input" placeholder="Jump to a topic or lab…" autofocus><div class="command-results"></div></div>`;document.body.appendChild(wrap);
-  const input=wrap.querySelector('input'), results=wrap.querySelector('.command-results');
-  const draw=()=>{const q=input.value.trim().toLowerCase();const matches=allLabs.filter(l=>!q||`${l.topicTitle} ${l.title} ${l.summary}`.toLowerCase().includes(q)).slice(0,14);results.innerHTML=matches.map(l=>`<button class="command-result" data-id="${l.id}">${h(l.title)}<small>${h(l.topicTitle)} · ${l.minutes||20} min</small></button>`).join('');results.querySelectorAll('button').forEach(b=>b.onclick=()=>{wrap.remove();state.currentLab=b.dataset.id;state.step=0;saveState();go(`lab/${b.dataset.id}`)})};
-  input.addEventListener('input',draw);wrap.addEventListener('click',e=>{if(e.target===wrap)wrap.remove()});input.focus();draw();
-}
-
-window.addEventListener('hashchange',render);
-window.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openCommand()}if(e.key==='Escape')document.querySelector('.command-overlay')?.remove()});
-if(!location.hash) location.hash='home'; else render();
-
-if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+window.addEventListener('hashchange', render);
+if (!location.hash) location.hash = 'home'; else render();
