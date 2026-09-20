@@ -87,10 +87,34 @@ function runWorker(source, code, timeoutMs) {
   });
 }
 
-export async function runCode(language, source, tests = '') {
+export async function runCode(language, source, tests = '', options = {}) {
+  const mode = options.mode || (tests.trim() ? 'checks' : 'run');
+  const checkMode = mode === 'checks';
+  const CHECK_SENTINEL = '__SWE_REVISION_CHECKS_COMPLETED__';
+
+  if (checkMode && !tests.trim()) {
+    return { ok:false, output:'', error:'No correctness checks are configured for this exercise.' };
+  }
+
   if (language === 'python') {
-    const combined = `${source}\n\n${tests || ''}`;
-    return runWorker(pythonWorkerSource(), combined, PY_TIMEOUT_MS);
+    const combined = checkMode
+      ? `${source}\n\n${tests}\nprint("${CHECK_SENTINEL}")`
+      : source;
+    const result = await runWorker(pythonWorkerSource(), combined, PY_TIMEOUT_MS);
+    if (!checkMode) {
+      if (result.ok && result.output === '✓ Program completed with no output.') {
+        result.output = 'Program completed. No correctness checks were run.';
+      }
+      return result;
+    }
+    if (!result.ok) return result;
+    const lines = String(result.output || '').split('\n');
+    const sentinelIndex = lines.lastIndexOf(CHECK_SENTINEL);
+    if (sentinelIndex === -1) {
+      return { ok:false, output:result.output || '', error:'The correctness checks did not complete.' };
+    }
+    lines.splice(sentinelIndex, 1);
+    return { ok:true, output:lines.join('\n').trim() || 'All configured checks completed successfully.' };
   }
 
   let js = source;
@@ -116,5 +140,22 @@ export async function runCode(language, source, tests = '') {
     }).outputText;
   }
 
-  return runWorker(jsWorkerSource(), `${js}\n\n${compiledTests || ''}`, JS_TIMEOUT_MS);
+  if (!checkMode) {
+    const result = await runWorker(jsWorkerSource(), js, JS_TIMEOUT_MS);
+    if (result.ok && result.output === '✓ Program completed with no output.') {
+      result.output = 'Program completed. No correctness checks were run.';
+    }
+    return result;
+  }
+
+  const combined = `${js}\n\n${compiledTests}\nconsole.log('${CHECK_SENTINEL}');`;
+  const result = await runWorker(jsWorkerSource(), combined, JS_TIMEOUT_MS);
+  if (!result.ok) return result;
+  const lines = String(result.output || '').split('\n');
+  const sentinelIndex = lines.lastIndexOf(CHECK_SENTINEL);
+  if (sentinelIndex === -1) {
+    return { ok:false, output:result.output || '', error:'The correctness checks did not complete.' };
+  }
+  lines.splice(sentinelIndex, 1);
+  return { ok:true, output:lines.join('\n').trim() || 'All configured checks completed successfully.' };
 }

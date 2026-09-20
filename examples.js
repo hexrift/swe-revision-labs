@@ -392,12 +392,21 @@ export const EXERCISES = {
     # return [i, j] or []
     pass
 `,
-`const a = twoSum([2,7,11,15], 9); if (JSON.stringify(a)!=='[0,1]') throw new Error('basic case');
-const b = twoSum([3,2,4], 6); if (JSON.stringify(b)!=='[1,2]') throw new Error('duplicate-safe case');
-console.log('✓ hidden-style checks passed');`,
-`assert two_sum([2,7,11,15], 9) == [0,1]
-assert two_sum([3,2,4], 6) == [1,2]
-print('✓ hidden-style checks passed')`),
+`const check = (actual, expected, label) => {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`${label}: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`);
+  }
+};
+check(twoSum([2,7,11,15], 9), [0,1], 'basic case');
+check(twoSum([3,2,4], 6), [1,2], 'duplicate-safe case');
+console.log('2 / 2 checks passed');`,
+`def _check(actual, expected, label):
+    if actual != expected:
+        raise AssertionError(f"{label}: expected {expected!r}, received {actual!r}")
+
+_check(two_sum([2,7,11,15], 9), [0,1], 'basic case')
+_check(two_sum([3,2,4], 6), [1,2], 'duplicate-safe case')
+print('2 / 2 checks passed')`),
 
   dedupe: E('Return unique values while preserving first-seen order. Aim for O(n) expected time and explain the extra space.',
 `function uniqueStable(values) {

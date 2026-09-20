@@ -242,9 +242,25 @@ async function hydrateEditor(lab) {
   }
   const getValue=()=>editor?.getValue() ?? host.querySelector('textarea')?.value ?? value;
   const terminal=app.querySelector('#terminal-output');
-  const execute=async(tests)=>{terminal.innerHTML='Running…';const result=await runCode(state.language,getValue(),tests);terminal.innerHTML=`<span class="${result.ok?'ok':'err'}">${h(result.ok?'PASS':'ERROR')}</span>\n${h(result.output||'')}${result.error?'\n'+h(result.error):''}`};
-  app.querySelector('#run-code').onclick=()=>execute('');
-  app.querySelector('#run-tests').onclick=()=>execute(exercise.tests||'');
+  const execute=async(mode)=>{
+    const isCheck=mode==='checks';
+    const tests=isCheck ? (exercise.tests||'') : '';
+    if(isCheck && !tests.trim()){
+      terminal.innerHTML='<span class="err">NO CHECKS CONFIGURED</span>\nThis exercise has no correctness checks, so it cannot be marked PASS.';
+      return;
+    }
+    terminal.innerHTML=isCheck?'Running checks…':'Running…';
+    const result=await runCode(state.language,getValue(),tests,{mode});
+    const label=isCheck
+      ? (result.ok?'ALL CHECKS PASSED':'CHECKS FAILED')
+      : (result.ok?'EXECUTED':'ERROR');
+    const detail=result.output || (isCheck && result.ok
+      ? 'All configured checks completed successfully.'
+      : (!isCheck && result.ok ? 'Program completed. No correctness checks were run.' : ''));
+    terminal.innerHTML=`<span class="${result.ok?'ok':'err'}">${h(label)}</span>\n${h(detail)}${result.error?'\n'+h(result.error):''}`;
+  };
+  app.querySelector('#run-code').onclick=()=>execute('run');
+  app.querySelector('#run-tests').onclick=()=>execute('checks');
   app.querySelector('#reset-code').onclick=()=>{state.code[key]=exercise.starter;saveState();if(editor)editor.setValue(exercise.starter);else if(host.querySelector('textarea'))host.querySelector('textarea').value=exercise.starter;terminal.textContent='Reset to starter code.'};
 }
 
