@@ -107,7 +107,8 @@ RETRY_WINDOW_SECONDS = 30`,
     return payload.user.name.upper()`,
 'Boundary data is not trustworthy because a type annotation says so. Narrow or validate before use.'),
   P('mutable-default','fundamentals','Do not share mutable defaults','pythonData','state',
-`function add(item, bucket = []) {
+`const sharedBucket = [];
+function add(item, bucket = sharedBucket) {
   bucket.push(item);
   return bucket;
 }`,
@@ -123,7 +124,7 @@ RETRY_WINDOW_SECONDS = 30`,
     bucket = [] if bucket is None else bucket
     bucket.append(item)
     return bucket`,
-'Python evaluates default arguments once. In all languages, be explicit about whether state is shared or fresh.',{calls:3}),
+'Python evaluates mutable default arguments once at function definition. In JavaScript, a default array literal is fresh per call; the poor JS example therefore uses an explicitly shared default to demonstrate the same ownership bug.',{calls:3}),
   P('copy-boundary','fundamentals','Be deliberate about mutation','tsHandbook','state',
 `function applyDiscount(order) {
   order.total *= 0.9;

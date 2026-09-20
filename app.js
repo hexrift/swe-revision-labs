@@ -1,5 +1,6 @@
 import { CATEGORIES, PATTERNS, SOURCES, getPattern, getCategory, patternsFor } from './patterns.js';
 import { FINAL_QUIZ } from './quiz.js';
+import { renderCodeVisual } from './visual-models.js';
 
 const root = document.querySelector('#app');
 const STORE = 'swe-revision-labs:v7';
@@ -336,83 +337,7 @@ function architectureVisual(pattern, scenario) {
 
 function visual(pattern, values, scenario='normal') {
   if (pattern.category === 'architecture') return architectureVisual(pattern, scenario);
-  const kind = pattern.viz;
-  if (kind === 'cost') {
-    const c = costNumbers(pattern, values);
-    const max = Math.max(c.bad,c.good);
-    return `<div class="viz-caption"><strong>${esc(c.label)}</strong><span>Illustrative, not a benchmark</span></div>
-      <div class="bar-compare">
-        <div><span>Poor</span><b style="width:${logScale(c.bad,max)}%"></b><em>${Math.round(c.bad).toLocaleString()}</em></div>
-        <div><span>Better</span><b style="width:${logScale(c.good,max)}%"></b><em>${Math.round(c.good).toLocaleString()}</em></div>
-      </div>
-      <p class="viz-note">As the input grows, the repeated operation is what changes the shape of the cost.</p>`;
-  }
-  if (kind === 'allocation') {
-    const n = Number(values.n || 100);
-    const bad = Math.round(n*(n+1)/2);
-    return `<div class="memory-visual">
-      <div><span>Poor</span><div class="memory-cells">${Array.from({length:12},(_,i)=>`<i class="${i<11?'filled':''}"></i>`).join('')}</div><strong>~${bad.toLocaleString()} copied items</strong></div>
-      <div><span>Better</span><div class="memory-cells">${Array.from({length:12},(_,i)=>`<i class="${i<4?'filled':''}"></i>`).join('')}</div><strong>~${n.toLocaleString()} appends</strong></div>
-    </div><p class="viz-note">The poor version repeatedly allocates a new growing container.</p>`;
-  }
-  if (kind === 'timeline') {
-    const task = Number(values.taskMs || 100);
-    const items = Number(values.items || 3);
-    const limit = Number(values.limit || Math.min(3,items));
-    const serial = task * items;
-    const parallel = task * Math.ceil(items / Math.max(limit,1));
-    return `<div class="timeline">
-      <div class="timeline-row"><span>Poor</span><div class="track">${Array.from({length:Math.min(items,8)},(_,i)=>`<i style="left:${i*(100/Math.min(items,8))}%;width:${100/Math.min(items,8)}%"></i>`).join('')}</div><b>~${serial} ms</b></div>
-      <div class="timeline-row"><span>Better</span><div class="track compact">${Array.from({length:Math.min(items,8)},(_,i)=>`<i style="left:${(i%limit)*(100/limit)}%;top:${Math.floor(i/limit)*8}px;width:${100/limit}%"></i>`).join('')}</div><b>~${parallel} ms</b></div>
-    </div><p class="viz-note">Illustrative wall-clock model for independent tasks. Real latency includes scheduling and downstream limits.</p>`;
-  }
-  if (kind === 'recursion') {
-    const n = Number(values.n || 12);
-    const calls = Math.min(1000000, Math.round(Math.pow(1.618,n)));
-    return `<div class="recursion-grid">
-      <div><span>Poor</span><strong>${calls.toLocaleString()}</strong><small>repeated recursive calls</small><div class="tree">${Array.from({length:15},(_,i)=>`<i style="--i:${i}"></i>`).join('')}</div></div>
-      <div><span>Better</span><strong>${n+1}</strong><small>distinct states cached</small><div class="state-row">${Array.from({length:Math.min(n+1,12)},()=>'<i></i>').join('')}</div></div>
-    </div>`;
-  }
-  if (kind === 'network') {
-    const n = Number(values.n || 50);
-    const latency = Number(values.latency || 20);
-    return `<div class="request-stack">
-      <div class="request-bad"><span>1</span>${Array.from({length:Math.min(n,9)},(_,i)=>`<i>${i+2}</i>`).join('')}<b>≈ ${(n+1)*latency} ms serial latency</b></div>
-      <div class="request-good"><span>1</span><i>2</i><b>≈ 2 round trips</b></div>
-    </div><p class="viz-note">N+1 is often a network problem before it is a CPU problem.</p>`;
-  }
-  if (kind === 'protocol') {
-    const failures = Number(values.failures || values.retries || 2);
-    return `<div class="protocol-flow">
-      <div class="lane"><strong>Poor</strong><span>client</span><b>→</b><span>request</span><b>→</b><span class="danger">retry × ${failures+1}</span></div>
-      <div class="lane"><strong>Better</strong><span>client</span><b>→</b><span>policy</span><b>→</b><span class="safe">bounded action</span></div>
-    </div><p class="viz-note">Protocol correctness is often about what happens after timeout, retry, reconnect or duplication.</p>`;
-  }
-  if (kind === 'agent') {
-    return `<div class="agent-flow">
-      <div class="agent-node">Untrusted input</div><b>→</b><div class="agent-node">Model</div><b>→</b><div class="agent-node boundary">Policy boundary</div><b>→</b><div class="agent-node action">Tool / state</div>
-    </div><div class="authority-note">${scenario==='edge'?'Stress case: the model proposes a high-impact or adversarial action. Deterministic policy still owns authority.':'Normal case: model output is a proposal. Validation and authorization still happen outside the model.'}</div>`;
-  }
-  if (kind === 'boundary') {
-    const raw = Object.values(values)[0] || (scenario==='edge' ? 'unexpected / hostile input' : 'normal input');
-    return `<div class="boundary-viz">
-      <div class="boundary-input"><small>input</small><strong>${esc(raw)}</strong></div>
-      <div class="boundary-path bad"><span>poor</span><b>→</b><em>trusted immediately</em><b>→</b><strong>sink</strong></div>
-      <div class="boundary-path good"><span>better</span><b>→</b><em>parse + validate + authorize</em><b>→</b><strong>sink</strong></div>
-    </div>`;
-  }
-  if (kind === 'state' || kind === 'binding' || kind === 'scope' || kind === 'object') {
-    return `<div class="object-viz">
-      <div class="object-card"><small>caller</small><strong>A</strong></div><b>→</b>
-      <div class="object-card shared"><small>state</small><strong>${kind==='binding'?'binding':'object'}</strong><span>${scenario==='edge'?'changed unexpectedly':'explicit ownership'}</span></div><b>→</b>
-      <div class="object-card"><small>result</small><strong>B</strong></div>
-    </div><p class="viz-note">The key question is who owns the state and who is allowed to change it.</p>`;
-  }
-  return `<div class="flow-viz">
-    <div class="flow-row bad"><span>Poor</span><i>input</i><b>→</b><i>hidden step</i><b>→</b><i>surprise</i></div>
-    <div class="flow-row good"><span>Better</span><i>input</i><b>→</b><i>explicit step</i><b>→</b><i>clear result</i></div>
-  </div>`;
+  return renderCodeVisual(pattern, values, scenario, esc);
 }
 
 function list(items, cls='') {
