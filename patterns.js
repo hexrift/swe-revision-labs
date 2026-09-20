@@ -1,6 +1,7 @@
 import { ARCHITECTURE_SOURCES, ARCHITECTURE_PATTERNS } from './architecture.js';
+import { INTERVIEW_SOURCES, INTERVIEW_CATEGORIES, INTERVIEW_PATTERNS } from './interview-curriculum.js';
 
-export const SOURCES = { ...ARCHITECTURE_SOURCES,
+export const SOURCES = { ...ARCHITECTURE_SOURCES, ...INTERVIEW_SOURCES,
   mdnStyle: { label: 'MDN · JavaScript code style', url: 'https://developer.mozilla.org/en-US/docs/MDN/Writing_guidelines/Code_style_guide/JavaScript' },
   mdnClasses: { label: 'MDN · Using classes', url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_classes' },
   mdnVars: { label: 'MDN · Variables', url: 'https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/Variables' },
@@ -19,7 +20,7 @@ export const SOURCES = { ...ARCHITECTURE_SOURCES,
   mcpAuth: { label: 'MCP Apps · Authorization', url: 'https://apps.extensions.modelcontextprotocol.io/api/documents/authorization.html' }
 };
 
-export const CATEGORIES = [
+const BASE_CATEGORIES = [
   { id:'fundamentals', title:'Variables & values', icon:'01', description:'Names, mutation, types, defaults and boundaries.' },
   { id:'functions', title:'Functions', icon:'02', description:'Purity, parameters, errors, recursion and async work.' },
   { id:'classes', title:'Classes & objects', icon:'03', description:'State, encapsulation, composition and API design.' },
@@ -818,7 +819,9 @@ tool('apply_fix', ...)`,
 'MCP distinguishes resources, prompts and tools because control and risk differ across these primitives.')
 ];
 
-export const PATTERNS = [...BASE_PATTERNS, ...ARCHITECTURE_PATTERNS];
+export const CATEGORIES = [...BASE_CATEGORIES, ...INTERVIEW_CATEGORIES];
+
+export const PATTERNS = [...BASE_PATTERNS, ...ARCHITECTURE_PATTERNS, ...INTERVIEW_PATTERNS];
 
 export function getPattern(id) { return PATTERNS.find(pattern => pattern.id === id); }
 export function getCategory(id) { return CATEGORIES.find(category => category.id === id); }

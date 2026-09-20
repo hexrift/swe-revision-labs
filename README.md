@@ -15,7 +15,7 @@ The app is built around a curated pattern library rather than a live terminal. E
 
 ## Pattern library
 
-The current build contains **73 sourced lessons** across:
+The current build contains **121 sourced lessons** across:
 
 - Variables & values
 - Functions
@@ -25,6 +25,14 @@ The current build contains **73 sourced lessons** across:
 - Secure coding
 - AI & MCP
 - Architecture & compute
+- Algorithms & data structures
+- Language & runtime internals
+- Concurrency & parallelism
+- Databases & storage
+- Distributed systems
+- Networking & protocols
+- Reliability & observability
+- Testing & delivery
 
 Examples are adapted from reputable sources rather than copied verbatim. Each lesson links to its source, including MDN, Python/PEP documentation, the TypeScript Handbook, Node.js, OWASP, IETF RFCs and the Model Context Protocol specification.
 
@@ -64,3 +72,12 @@ MIT
 The architecture track covers modular monoliths, microservices, event-driven systems, web/queue/worker, sync vs async boundaries, virtual machines/containers/functions, serverless, Kubernetes workload semantics, stateful vs stateless compute, CQRS, event sourcing, gateways/BFFs, batch vs streaming, cache-aside, big compute and horizontal vs vertical scaling.
 
 The content is grounded in current Microsoft Azure Architecture Center guidance, AWS Well-Architected guidance, Kubernetes documentation, Apache Kafka documentation and Martin Fowler's event-driven architecture distinctions. Architecture lessons emphasize when to use a style, when not to use it, and the operational trade-offs.
+
+
+## Interview revision coverage
+
+The curriculum is now structured around the areas routinely probed in experienced-engineer interviews: algorithmic analysis, runtime behavior, concurrency, database internals, distributed-system guarantees, network protocols, architecture/compute, reliability/observability, secure coding, testing/delivery and AI/MCP design.
+
+The surface remains intentionally simple: choose one topic, complete one focused lesson, manipulate the visual model, inspect trade-offs/failure modes, and only then mark it comfortable.
+
+Every lesson carries a direct source reference. The curriculum favors standards and primary documentation (IETF RFCs, PostgreSQL, Node.js, Python, TypeScript, Kubernetes, Apache Kafka, OpenTelemetry, OWASP, Google SRE, AWS/Azure architecture guidance) plus a small set of established practitioner references such as Martin Fowler and Martin Kleppmann.

@@ -14,6 +14,13 @@ const defaults = {
   quiz: { current: 0, answers: {}, completed: false }
 };
 
+const TRACKS = [
+  { title:'Code & runtime', subtitle:'Language, algorithms and concurrency', categories:['fundamentals','functions','classes','collections','algorithms','runtime','concurrency'] },
+  { title:'Systems & data', subtitle:'Databases, distribution, networking and architecture', categories:['databases','distributed','networking','web','architecture'] },
+  { title:'Production engineering', subtitle:'Reliability, observability, security and delivery', categories:['reliability','security','testing'] },
+  { title:'AI systems', subtitle:'LLM application design, tools, RAG and MCP', categories:['ai'] }
+];
+
 const CATEGORY_GUIDES = {
   fundamentals: {
     mentalModel:'Track ownership, allowed values and mutation. Most “simple variable” bugs are really ambiguity about who can change what and when.',
@@ -159,12 +166,12 @@ function progressStrip() {
 function home() {
   const next = firstIncomplete();
   const cat = getCategory(next.category);
-  const categoryCards = CATEGORIES.map(category => {
-    const items = patternsFor(category.id);
-    const done = items.filter(p => state.comfortable[p.id]).length;
-    return `<button class="category-card" data-category="${category.id}">
-      <span class="category-number">${category.icon}</span>
-      <span class="category-copy"><strong>${esc(category.title)}</strong><small>${esc(category.description)}</small></span>
+  const categoryCards = TRACKS.map((track,index) => {
+    const items = PATTERNS.filter(pattern => track.categories.includes(pattern.category));
+    const done = items.filter(pattern => state.comfortable[pattern.id]).length;
+    return `<button class="category-card" data-category="${track.categories[0]}">
+      <span class="category-number">0${index+1}</span>
+      <span class="category-copy"><strong>${esc(track.title)}</strong><small>${esc(track.subtitle)}</small></span>
       <span class="category-progress">${done}/${items.length}</span>
     </button>`;
   }).join('');

@@ -553,3 +553,246 @@ export function renderCodeVisual(pattern, values={}, scenario='normal', esc=(v)=
       ${flow([node('input'), arrow(), node('explicit boundary'), arrow(), node('outcome', edge?'controlled failure':'result','good')], 'good')}
     </div>`;
 }
+
+function m(pattern, scenario) {
+  const model = pattern.interviewModel || {};
+  return scenario === 'edge' ? (model.edge || model.normal || {}) : (model.normal || {});
+}
+function chip(text, cls='') { return `<span class="iv-chip ${cls}">${text}</span>`; }
+function box(title, value='', cls='') {
+  return `<div class="iv-box ${cls}"><small>${title}</small>${value!==''?`<strong>${value}</strong>`:''}</div>`;
+}
+function ivArrow(label='→') { return `<b class="iv-arrow">${label}</b>`; }
+function metricRows(rows) {
+  const max = Math.max(1, ...rows.map(([,v]) => Number(v) || 0));
+  return `<div class="iv-metrics">${rows.map(([label,value,cls='']) => {
+    const n = Number(value) || 0;
+    const width = Math.max(4, Math.min(100, Math.log10(n+1)/Math.log10(max+1)*100));
+    return `<div><span>${label}</span><i class="${cls}" style="width:${width}%"></i><b>${fmt(value)}</b></div>`;
+  }).join('')}</div>`;
+}
+function statusScenario(edge, normal, stress) {
+  return `<div class="scenario-title"><span>${edge?'Stress / failure':'Normal'}</span><strong>${edge?stress:normal}</strong></div>`;
+}
+
+export function renderInterviewVisual(pattern, scenario='normal', esc=(v)=>String(v)) {
+  const data = m(pattern, scenario);
+  const edge = scenario === 'edge';
+  const type = pattern.interviewModel?.type;
+
+  switch (type) {
+    case 'growth':
+      return `${statusScenario(edge,'moderate input','large input exposes growth')}
+        ${metricRows((data.labels||[]).map((label,i)=>[label,(data.values||[])[i]||0,i===0?'good':'']))}
+        <p class="viz-note">The chart is logarithmically scaled so very different growth classes remain visible together.</p>`;
+
+    case 'search':
+      return `${statusScenario(edge,'small search space','large search space')}
+        <div class="iv-halving">${(data.steps||[]).map((value,i)=>`<div style="--w:${Math.max(5,100/(i+1))}%"><span>${fmt(value)} candidates</span></div>`).join('')}</div>
+        <p class="viz-note">Each valid binary-search step removes about half of the remaining candidate space.</p>`;
+
+    case 'window': {
+      const n=Number(data.n||20), left=Number(data.left||0), right=Number(data.right||0);
+      const cells=Math.min(24,n);
+      return `${statusScenario(edge,'window advances through input','large input; pointer count still bounded')}
+        <div class="iv-array">${Array.from({length:cells},(_,i)=>`<i class="${i>=Math.floor(left/n*cells)&&i<=Math.floor(right/n*cells)?'active':''}">${i}</i>`).join('')}</div>
+        <div class="iv-summary">${chip('left moves ≤ n')}${chip('right moves ≤ n')}${chip('total pointer moves O(n)','good')}</div>`;
+    }
+
+    case 'heap':
+      return `${statusScenario(edge,'heap property maintained','extreme values still only repair one path')}
+        <div class="iv-heap">${(data.nodes||[]).map((v,i)=>`<i style="--i:${i}">${v}</i>`).join('')}</div>
+        <p class="viz-note">Heap order constrains parent/child priority; it does not keep every element globally sorted.</p>`;
+
+    case 'graph':
+      return `${statusScenario(edge,'BFS frontier','DFS / denser traversal')}
+        <div class="iv-graph">
+          ${Array.from({length:Math.min(12,Number(data.nodes||7))},(_,i)=>`<i class="${i<4?'visited':''}">${i}</i>`).join('')}
+        </div>
+        <div class="iv-summary">${chip(`${data.nodes||0} vertices`)}${chip(`${data.edges||0} edges`)}${chip(`${data.frontier||'queue'} frontier`,'good')}</div>`;
+
+    case 'dp':
+      return `${statusScenario(edge,'compact state space','larger state × transition product')}
+        ${metricRows([['states',data.states||0],['transitions / state',data.transitions||0],['rough state work',(data.states||0)*(data.transitions||0),'good']])}
+        <p class="viz-note">A useful first estimate is number of distinct states × transition work per state.</p>`;
+
+    case 'event-loop':
+      return `${statusScenario(edge,'callbacks remain short','one callback monopolizes the loop')}
+        <div class="iv-loop">
+          <div class="iv-thread">${Array.from({length:8},(_,i)=>`<i class="${edge&&i===2?'blocked':''}">${edge&&i===2?`${data.syncMs}ms CPU`:i<3?'callback':'queued'}</i>`).join('')}</div>
+          <div class="iv-queue">${Array.from({length:Math.min(12,Number(data.queued||0))},()=>'<i></i>').join('')}</div>
+        </div>
+        <p class="viz-note">Queued work cannot start while the event-loop thread is executing synchronous CPU work.</p>`;
+
+    case 'buffer': {
+      const producer=Number(data.producer||data.items||0), consumer=Number(data.consumer||0), buffer=Number(data.buffer||data.materialized||0);
+      return `${statusScenario(edge,'producer and consumer stay balanced','producer outruns consumer / materialization grows')}
+        ${metricRows([['producer / total',producer],['consumer / streamed',consumer||Math.max(1,producer-buffer)],['buffer / materialized',buffer,edge?'poor':'good']])}`;
+    }
+
+    case 'threads':
+      return `${statusScenario(edge,'I/O-bound work','CPU-bound bytecode on default CPython')}
+        <div class="iv-threads">${Array.from({length:Math.min(12,Number(data.threads||4))},(_,i)=>`<i class="${edge&&i>0?'waiting':''}">T${i+1}</i>`).join('')}</div>
+        <p class="viz-note">${edge?'On default CPython, one thread at a time executes Python bytecode; use processes/native code/free-threaded builds where suitable.':'Threads can overlap blocking I/O because the interpreter/runtime can yield while waiting.'}</p>`;
+
+    case 'types':
+      return `${statusScenario(edge,'runtime value matches expectation','runtime value violates static assumption')}
+        <div class="iv-pipeline">${box('runtime input',data.input||'value')}${ivArrow()}${box('validate / narrow',data.narrowed?'accepted':'rejected',data.narrowed?'good':'poor')}${ivArrow()}${box('typed code',data.narrowed?'safe to use':'not entered')}</div>`;
+
+    case 'interleaving':
+      return `${statusScenario(edge,'single actor','competing actors interleave')}
+        <div class="iv-interleave">
+          <div><span>A</span><i>read ${data.balance||''}</i><i>check</i><i>write</i></div>
+          ${edge?'<div><span>B</span><i>read same</i><i>check same</i><i class="danger">conflicting write</i></div>':''}
+        </div>`;
+
+    case 'locks':
+      return `${statusScenario(edge,'consistent acquisition order','circular wait')}
+        <div class="iv-locks">
+          <div>${chip('T1')}${ivArrow()}${chip(data.t1||data.a||'A→B')}</div>
+          <div>${chip('T2')}${ivArrow()}${chip(data.t2||data.b||'A→B',edge?'poor':'good')}</div>
+          ${edge?'<strong class="iv-warning">cycle: each actor can wait for a resource held by the other</strong>':'<strong class="iv-ok">same order prevents this lock-order cycle</strong>'}
+        </div>`;
+
+    case 'capacity':
+      return `${statusScenario(edge,'within concurrency budget','many requests wait behind fixed permits')}
+        ${metricRows([['requests',data.requests||0],['permits / capacity',data.limit||data.capacity||0,'good'],['waiting',Math.max(0,(data.requests||0)-(data.limit||data.capacity||0)),edge?'poor':'']])}`;
+
+    case 'pool':
+      return `${statusScenario(edge,'small queue','large job burst')}
+        <div class="iv-pool"><div class="iv-workers">${Array.from({length:Math.min(12,Number(data.workers||4))},(_,i)=>`<i>W${i+1}</i>`).join('')}</div>
+        <div class="iv-jobline">${Array.from({length:Math.min(20,Number(data.jobs||0))},()=>'<b></b>').join('')}</div></div>
+        <div class="iv-summary">${chip(`${data.workers||0} workers`,'good')}${chip(`${data.jobs||0} jobs`)}</div>`;
+
+    case 'queue':
+      return `${statusScenario(edge,'service rate ≥ arrival rate','arrival rate > service rate')}
+        ${metricRows([['arrival / sec',data.arrival||0],['service / sec',data.service||0,'good'],['queue depth',data.depth||0,edge?'poor':'']])}
+        <p class="viz-note">${edge?'Backlog grows while arrival exceeds sustainable service rate.':'The queue can absorb short bursts without persistent growth.'}</p>`;
+
+    case 'tree-index': {
+      const rows=Number(data.rows||0), matched=Number(data.matched||0);
+      return `${statusScenario(edge,'selective query','query matches a large fraction of table')}
+        <div class="iv-index-tree"><i>root</i><span></span><div><i>page</i><i>page</i><i>page</i></div><span></span><div class="leaves">${Array.from({length:8},(_,i)=>`<i class="${i<Math.max(1,Math.min(8,Math.ceil(matched/Math.max(rows,1)*8)))?'hit':''}"></i>`).join('')}</div></div>
+        <div class="iv-summary">${chip(`${fmt(rows)} rows`)}${chip(`${fmt(matched)} matched`,edge?'poor':'good')}</div>`;
+    }
+
+    case 'query-plan':
+      return `${statusScenario(edge,'estimates close to reality','cardinality estimate is badly wrong')}
+        ${metricRows([['estimated rows',data.estimated||0],['actual rows',data.actual||0,edge?'poor':'good']])}
+        <p class="viz-note">Large estimate errors can cascade into inappropriate join, scan or memory choices.</p>`;
+
+    case 'versions':
+      return `${statusScenario(edge,'few live row versions','version churn / long snapshots retain many versions')}
+        <div class="iv-version-row">${Array.from({length:Math.min(20,Number(data.versions||1))},(_,i)=>`<i class="${i===Math.min(19,Number(data.versions||1)-1)?'current':''}">v${i+1}</i>`).join('')}</div>
+        <div class="iv-summary">${chip(`${data.readers||0} readers`)}${chip(`${data.writers||0} writers`)}${chip(`${data.versions||0} versions`,edge?'poor':'good')}</div>`;
+
+    case 'transactions':
+      return `${statusScenario(edge,'transactions do not conflict','concurrent operations hit the same invariant')}
+        <div class="iv-transactions"><div>T1 <span>read snapshot</span><span>write</span></div><div>T2 <span>read snapshot</span><span class="${edge?'conflict':''}">${edge?'serialization/conflict':'independent write'}</span></div></div>`;
+
+    case 'partition':
+      return `${statusScenario(edge,'partition pruning touches little data','query touches most partitions')}
+        <div class="iv-partitions">${Array.from({length:Math.min(24,Number(data.partitions||1))},(_,i)=>`<i class="${i<Math.min(24,Math.ceil((data.touched||0)/Math.max(data.partitions||1,1)*24))?'hit':''}">P</i>`).join('')}</div>
+        <div class="iv-summary">${chip(`${data.partitions||0} partitions`)}${chip(`${data.touched||0} touched`,edge?'poor':'good')}</div>`;
+
+    case 'consensus': {
+      const nodes=Number(data.nodes||5), available=Number(data.available||nodes), quorum=Number(data.quorum||Math.floor(nodes/2)+1);
+      return `${statusScenario(edge,'quorum available','quorum unavailable')}
+        <div class="iv-cluster">${Array.from({length:nodes},(_,i)=>`<i class="${i<available?'up':'down'}">N${i+1}</i>`).join('')}</div>
+        <div class="iv-summary">${chip(`${available}/${nodes} reachable`,edge?'poor':'good')}${chip(`quorum = ${quorum}`)}</div>`;
+    }
+
+    case 'delivery':
+      return `${statusScenario(edge,'one delivery, one effect','redelivery occurs after ambiguous failure')}
+        <div class="iv-delivery">${box('broker deliveries',data.deliveries||1)}${ivArrow()}${box('business effects',data.sideEffects||1,(data.deliveries||1)===(data.sideEffects||1)?'':'deduplicated / idempotent','good')}</div>`;
+
+    case 'replication':
+      return `${statusScenario(edge,'replica caught up','replica lag exposes older version')}
+        <div class="iv-replication">${box('primary',`v${data.writeVersion||0}`,'leader')}${ivArrow(`${data.lagMs||0}ms`)}${box('replica',`v${data.replicaVersion||0}`,edge?'stale':'current',edge?'poor':'good')}</div>`;
+
+    case 'partition-network':
+      return `${statusScenario(edge,'regions communicate','network link is partitioned')}
+        <div class="iv-regions">${box('Region A','writes')}${ivArrow(edge?'×':'↔')}${box('Region B',edge?'unreachable':'replicating',edge?'poor':'good')}</div>
+        <p class="viz-note">${edge?'A timeout cannot distinguish dead from unreachable; availability/consistency policy decides what can continue.':'Replication/coordination can proceed while the link is healthy.'}</p>`;
+
+    case 'partitions':
+      return `${statusScenario(edge,'key preserves entity-local order','events are spread without the needed ordering key')}
+        <div class="iv-partition-log">${Array.from({length:Number(data.partitions||4)},(_,i)=>`<div><span>P${i}</span><i>1</i><i>2</i><i>3</i></div>`).join('')}</div>
+        <div class="iv-summary">${chip(data.keyed?'stable key → local order':'no relevant key → related events may split',data.keyed?'good':'poor')}</div>`;
+
+    case 'retry':
+      return `${statusScenario(edge,'single bounded retry layer','nested retry multiplication')}
+        ${metricRows([['retrying layers',data.layers||1],['retries / layer',data.retries||0],['possible attempts',data.multiplier||1,edge?'poor':'good']])}`;
+
+    case 'protocol-stack':
+      return `${statusScenario(edge,'handshake reaches application','failure occurs before HTTP')}
+        <div class="iv-stack">${(data.steps||[]).map((step,i)=>`<div class="${edge&&i===2?'failed':''}"><span>${i+1}</span>${step}</div>`).join('')}</div>`;
+
+    case 'multiplex':
+      return `${statusScenario(edge,'multiple streams share a connection','loss affects transport differently')}
+        <div class="iv-multiplex"><div class="iv-connection">${Array.from({length:Math.min(12,Number(data.streams||4))},(_,i)=>`<i>S${i+1}</i>`).join('')}</div>${edge&&data.loss?'<strong>packet loss</strong>':''}</div>`;
+
+    case 'realtime':
+      return `${statusScenario(edge,'one-way server push','bidirectional + datagram requirement')}
+        <div class="iv-choice">${['SSE','WebSocket','WebTransport'].map(name=>`<div class="${String(data.choice||'').includes(name)?'selected':''}"><b>${name}</b><span>${name==='SSE'?'server → client':name==='WebSocket'?'↔ reliable messages':'↔ streams + datagrams'}</span></div>`).join('')}</div>`;
+
+    case 'rpc':
+      return `${statusScenario(edge,'one RPC inside deadline','many RPCs with little deadline remaining')}
+        <div class="iv-rpc">${box('client stub',`${data.calls||1} call(s)`)}${ivArrow()}${box('HTTP/2 + protobuf',`${data.deadlineMs||0}ms deadline`,edge?'tight budget':'')}${ivArrow()}${box('server method','typed contract')}</div>`;
+
+    case 'cache':
+      return `${statusScenario(edge,'entry is fresh','entry is stale and must revalidate/refetch')}
+        <div class="iv-cache">${box('max-age',`${data.freshSeconds||0}s`)}${ivArrow()}${box('age',`${data.age||0}s`,edge?'stale':'fresh',edge?'poor':'good')}${ivArrow()}${box('action',edge?'revalidate':'serve cache')}</div>`;
+
+    case 'slo':
+      return `${statusScenario(edge,'objective met','objective missed')}
+        ${metricRows([['SLO target',data.target||0],['actual SLI',data.actual||0,edge?'poor':'good']])}
+        <p class="viz-note">The error budget is the allowed unreliability between the objective and 100% over the defined window.</p>`;
+
+    case 'latency':
+      return `${statusScenario(edge,'healthy tail','tail latency dominates user experience')}
+        ${metricRows([['p50 ms',data.p50||0],['p95 ms',data.p95||0],['p99 ms',data.p99||0,edge?'poor':'']])}`;
+
+    case 'deadline':
+      return `${statusScenario(edge,'deadline has useful budget remaining','almost all request budget is spent')}
+        <div class="iv-deadline"><div class="iv-deadline-track"><i style="width:${Math.min(100,(data.spent||0)/Math.max(data.budget||1,1)*100)}%"></i></div>
+        <div class="iv-summary">${chip(`${data.spent||0}ms spent`)}${chip(`${Math.max(0,(data.budget||0)-(data.spent||0))}ms left`,edge?'poor':'good')}</div></div>`;
+
+    case 'breaker':
+      return `${statusScenario(edge,'circuit closed','failure threshold opens circuit')}
+        <div class="iv-breaker">${['closed','open','half-open'].map(s=>`<div class="${String(data.state).toLowerCase()===s?'selected':''}">${s}</div>`).join('')}</div>
+        <div class="iv-summary">${chip(`${data.failures||0} recent failures`,edge?'poor':'')}</div>`;
+
+    case 'telemetry':
+      return `${statusScenario(edge,'signals share trace context','signals exist but cannot be correlated')}
+        <div class="iv-telemetry">${['metrics','traces','logs'].map((x,i)=>`<div><b>${x}</b><span>${data.correlated?'trace_id=abc':`id=${i+1} unrelated`}</span></div>`).join('')}</div>`;
+
+    case 'tests':
+      return `${statusScenario(edge,'balanced portfolio','most coverage pushed into slow E2E')}
+        <div class="iv-pyramid"><div style="--w:${data.e2e||0}%">E2E ${data.e2e||0}%</div><div style="--w:${data.integration||0}%">Integration ${data.integration||0}%</div><div style="--w:${data.unit||0}%">Unit ${data.unit||0}%</div></div>`;
+
+    case 'contracts':
+      return `${statusScenario(edge,'all consumers compatible','one consumer/provider contract breaks')}
+        <div class="iv-contracts">${Array.from({length:Number(data.consumers||3)},(_,i)=>`<i class="${i<Number(data.compatible||0)?'good':'bad'}">C${i+1}</i>`).join('')}${ivArrow()}${box('provider','verified in CI')}</div>`;
+
+    case 'property':
+      return `${statusScenario(edge,'generated examples uphold invariant','generator finds a counterexample')}
+        <div class="iv-property">${Array.from({length:Math.min(24,Math.max(4,Math.ceil((data.examples||20)/50)))},(_,i)=>`<i class="${edge&&i===5?'bad':'good'}"></i>`).join('')}</div>
+        <div class="iv-summary">${chip(`${fmt(data.examples||0)} generated cases`)}${chip(`${data.failures||0} failures`,edge?'poor':'good')}</div>`;
+
+    case 'signal':
+      return `${statusScenario(edge,'CI red is trustworthy','flaky failures create alert fatigue')}
+        ${metricRows([['test runs',data.runs||0],['random failures',data.randomFailures||0,edge?'poor':'good']])}`;
+
+    case 'rollout':
+      return `${statusScenario(edge,'canary remains healthy','canary metrics fail before wider exposure')}
+        <div class="iv-rollout"><div class="iv-rollout-bar"><i class="${edge?'bad':'good'}" style="width:${Math.max(2,Number(data.percent||1))}%"></i></div>
+        <div class="iv-summary">${chip(`${data.percent||0}% exposed`)}${chip(data.healthy?'healthy → continue':'unhealthy → stop / rollback',data.healthy?'good':'poor')}</div></div>`;
+
+    case 'migration':
+      return `${statusScenario(edge,'old and new versions coexist on compatible schema','new version expects destructive schema too early')}
+        <div class="iv-migration">${['expand schema','deploy compatible code','backfill','switch','contract old'].map((x,i)=>`<div class="${edge&&i===4?'bad':i<4?'done':''}"><span>${i+1}</span>${x}</div>`).join('')}</div>`;
+  }
+
+  return `${statusScenario(edge,'normal case','stress case')}<div class="fallback-visual">${box('concept',pattern.title)}${ivArrow()}${box('outcome',edge?'failure mode exposed':'expected behavior')}</div>`;
+}

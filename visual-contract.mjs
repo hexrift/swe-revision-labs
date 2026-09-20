@@ -1,5 +1,5 @@
 import { PATTERNS } from './patterns.js';
-import { renderCodeVisual } from './visual-models.js';
+import { renderCodeVisual, renderInterviewVisual } from './visual-models.js';
 
 const esc = value => String(value);
 const failures = [];
@@ -8,13 +8,18 @@ for (const pattern of PATTERNS) {
   if (pattern.category === 'architecture') continue;
 
   const base = { ...(pattern.inputs || {}) };
-  const before = renderCodeVisual(pattern, base, 'normal', esc);
+  const before = pattern.interviewModel
+    ? renderInterviewVisual(pattern, 'normal', esc)
+    : renderCodeVisual(pattern, base, 'normal', esc);
 
   const entries = Object.entries(base);
   let after;
   let mode;
 
-  if (entries.length) {
+  if (pattern.interviewModel) {
+    after = renderInterviewVisual(pattern, 'edge', esc);
+    mode = 'scenario';
+  } else if (entries.length) {
     const [key, value] = entries[0];
     const changed = { ...base };
     if (typeof value === 'number') changed[key] = value === 0 ? 1 : value + Math.max(1, Math.ceil(Math.abs(value) * 0.25));
@@ -41,4 +46,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Visualization contracts passed for ${PATTERNS.filter(p => p.category !== 'architecture').length} code-pattern lessons.`);
+console.log(`Visualization contracts passed for ${PATTERNS.filter(p => p.category !== 'architecture').length} interactive lessons.`);
