@@ -299,51 +299,8 @@ function costNumbers(pattern, v) {
   }
 }
 
-function archNode(label, cls='') { return `<div class="arch-node ${cls}">${esc(label)}</div>`; }
-function connector(label='→', animated=false) { return `<span class="arch-connector ${animated?'animated':''}">${label}</span>`; }
-
-function architectureVisual(pattern, scenario) {
-  const stressed = scenario === 'edge';
-  switch (pattern.viz) {
-    case 'arch-monolith':
-      return `<div class="deploy-boundary ${stressed?'stress':''}"><span>one deployable</span><div class="module-grid">${['Orders','Payments','Inventory','Users'].map(x=>archNode(x)).join('')}</div></div><p class="viz-note">${stressed?'Stress case: one hot module can force scaling the whole deployable. Strong internal boundaries still keep extraction possible.':'Modules share a process/deployment boundary but communicate through explicit contracts.'}</p>`;
-    case 'arch-microservices':
-      return `<div class="arch-row center">${archNode('Client')}${connector()}${archNode('Gateway','dark')}</div><div class="service-grid">${['Orders','Payments','Inventory'].map((x,i)=>`<div>${archNode(x,stressed&&i===1?'stress':'')}${connector('↓',true)}${archNode(x+' DB','data')}</div>`).join('')}</div><p class="viz-note">${stressed?'Payments is failing: callers need timeouts, isolation and observability across service boundaries.':'Each service owns deployment and data; the price is distributed coordination.'}</p>`;
-    case 'arch-event':
-      return `<div class="arch-row center producers">${archNode('Producer A')}${archNode('Producer B')}</div>${connector('↓',true)}<div class="broker ${stressed?'stress':''}">Event broker <i></i></div>${connector('↓',true)}<div class="arch-row center consumers">${archNode('Email')}${archNode('Analytics')}${archNode('Loyalty')}</div><p class="viz-note">${stressed?'Stress case: one consumer is offline. Durable delivery, retries and replay policy decide what happens next.':'Producers publish facts without knowing every consumer.'}</p>`;
-    case 'arch-queue':
-      return `<div class="arch-row center">${archNode('Web')}${connector()}${archNode(stressed?'Queue: backlog ↑':'Queue','queue')}${connector()}${archNode(stressed?'Workers × 4':'Workers × 2','worker')}</div><div class="queue-dots">${Array.from({length:stressed?14:6},()=>'<i></i>').join('')}</div><p class="viz-note">The queue absorbs bursts; worker capacity determines drain rate.</p>`;
-    case 'arch-sync-async':
-      return `<div class="two-lanes"><div><strong>Synchronous path</strong><div class="arch-row">${archNode('Client')}${connector()}${archNode('Decision')}${connector()}${archNode('Response')}</div></div><div><strong>Asynchronous continuation</strong><div class="arch-row">${archNode('Event')}${connector()}${archNode('Broker')}${connector()}${archNode(stressed?'Consumer retry':'Consumer')}</div></div></div>`;
-    case 'arch-compute':
-      return `<div class="compute-grid">${[['VM','host control','you manage OS/runtime'],['Container','portable service','you manage image/orchestration'],['Function','event/request','provider manages servers']].map(([a,b,c],i)=>`<div class="${stressed&&i===2?'stress':''}"><b>${a}</b><span>${b}</span><small>${c}</small></div>`).join('')}</div><p class="viz-note">${stressed?'Stress case: a long-running/high-utilization workload can make per-invocation serverless economics or limits unattractive.':'Choose by workload shape, control needs and operations—not by platform fashion.'}</p>`;
-    case 'arch-serverless':
-      return `<div class="arch-row center">${archNode('Event')}${connector('',true)}${archNode('Function','function')}${connector()}${archNode('Managed state','data')}${connector()}${archNode('Next event')}</div><p class="viz-note">${stressed?'Failure/duplicate case: idempotency and durable orchestration decide whether repeated delivery is safe.':'Short-lived compute reacts to events while durable state lives outside the runtime.'}</p>`;
-    case 'arch-k8s':
-      return `<div class="k8s-box"><div class="control-plane">control plane · desired state</div><div class="node-grid">${[['Deployment','API replicas'],['StatefulSet','stable identity'],['DaemonSet','node agent'],['Job','run to completion']].map(([a,b])=>`<div><b>${a}</b><span>${b}</span></div>`).join('')}</div></div><p class="viz-note">${stressed?'A node disappears: controllers create replacement Pods according to workload semantics; durable storage/identity still need design.':'The controller contract—not the container image—defines lifecycle behavior.'}</p>`;
-    case 'arch-state':
-      return `<div class="state-compare"><div><b>Accidental local state</b>${archNode('Replica A: session')}${archNode(stressed?'Replica B: missing':'Replica B')}</div><div><b>External durable state</b><div class="arch-row">${archNode('Replica A')}${archNode('Replica B')}</div>${connector('↓')}${archNode('Shared state','data')}</div></div>`;
-    case 'arch-cqrs':
-      return `<div class="cqrs"><div class="arch-row">${archNode('Command')}${connector()}${archNode('Write model')}${connector()}${archNode('Write store','data')}</div><div class="projection-arrow">${connector('events / replication',true)}</div><div class="arch-row">${archNode('Query')}${connector()}${archNode(stressed?'Read model: lagging':'Read model')}${connector()}${archNode('Read store','data')}</div></div><p class="viz-note">The key trade-off is independent optimization versus synchronization/freshness complexity.</p>`;
-    case 'arch-event-source':
-      return `<div class="event-stream">${['OrderCreated','PaymentCaptured','Packed','Shipped'].map((x,i)=>`<div class="${stressed&&i===3?'stress':''}"><span>${i+1}</span>${x}</div>`).join('')}</div>${connector('↓ replay / project',true)}${archNode(stressed?'Projection needs rebuild':'Current order: SHIPPED','data')}`;
-    case 'arch-gateway':
-      return `<div class="arch-row center clients">${archNode('Web')}${archNode('Mobile')}</div>${connector('↓')}<div class="gateway ${stressed?'stress':''}">Gateway / BFF</div>${connector('↓')}<div class="service-grid small">${['Orders','Users','Search'].map(x=>archNode(x)).join('')}</div><p class="viz-note">${stressed?'Risk: domain logic accumulates here and turns the gateway into a new monolith.':'Keep edge composition/policy here; keep domain ownership behind it.'}</p>`;
-    case 'arch-batch-stream':
-      return `<div class="two-lanes"><div><strong>Batch</strong><div class="batch-box">${Array.from({length:8},()=>'<i></i>').join('')}<span>schedule → process chunk</span></div></div><div><strong>Stream</strong><div class="stream-box">${Array.from({length:8},()=>'<i></i>').join('')}<span>continuous events → continuous reaction</span></div></div></div><p class="viz-note">${stressed?'Late/out-of-order events force explicit event-time and replay rules in streaming systems.':'Start from freshness requirements; many mature systems use both.'}</p>`;
-    case 'arch-cache':
-      return `<div class="cache-flow"><div class="arch-row">${archNode('Request')}${connector()}${archNode(stressed?'Cache MISS':'Cache HIT','cache')}${connector()}${archNode(stressed?'Database':'Return','data')}</div>${stressed?'<div class="stampede">many simultaneous misses → origin pressure</div>':''}</div>`;
-    case 'arch-big-compute':
-      return `<div class="compute-fan"><div class="coordinator">partition</div>${connector('↓',true)}<div class="worker-grid">${Array.from({length:8},(_,i)=>`<i class="${stressed&&i>4?'idle':''}">W${i+1}</i>`).join('')}</div>${connector('↓ reduce') }<div class="coordinator">result</div></div><p class="viz-note">${stressed?'Serial work and communication cap speedup even when more workers exist.':'Parallel resources help only when enough useful work can run independently.'}</p>`;
-    case 'arch-scale':
-      return `<div class="scale-compare"><div><strong>Scale up</strong><div class="server tall">bigger server</div></div><div><strong>Scale out</strong><div class="replicas">${Array.from({length:stressed?6:3},()=>'<div class="server">replica</div>').join('')}</div></div></div><p class="viz-note">Horizontal scale adds distribution and state questions; vertical scale keeps a larger single failure domain.</p>`;
-    default:
-      return `<div class="arch-row center">${archNode('Input')}${connector('',true)}${archNode('Boundary')}${connector()}${archNode(stressed?'Failure path':'Outcome')}</div>`;
-  }
-}
-
 function visual(pattern, values, scenario='normal') {
-  if (pattern.category === 'architecture') return architectureVisual(pattern, scenario);
+  if (pattern.category === 'architecture') return renderArchitectureVisual(pattern, scenario, esc);
   return renderCodeVisual(pattern, values, scenario, esc);
 }
 

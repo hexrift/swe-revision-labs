@@ -796,3 +796,52 @@ export function renderInterviewVisual(pattern, scenario='normal', esc=(v)=>Strin
 
   return `${statusScenario(edge,'normal case','stress case')}<div class="fallback-visual">${box('concept',pattern.title)}${ivArrow()}${box('outcome',edge?'failure mode exposed':'expected behavior')}</div>`;
 }
+
+function archNodeV(label, cls='', esc=(v)=>String(v)) {
+  return `<div class="arch-node ${cls}">${esc(label)}</div>`;
+}
+function archConnectorV(label='→', animated=false) {
+  return `<span class="arch-connector ${animated?'animated':''}">${label}</span>`;
+}
+
+export function renderArchitectureVisual(pattern, scenario='normal', esc=(v)=>String(v)) {
+  const stressed = scenario === 'edge';
+  const N = (label, cls='') => archNodeV(label, cls, esc);
+  const C = (label='→', animated=false) => archConnectorV(label, animated);
+  switch (pattern.viz) {
+    case 'arch-monolith':
+      return `<div class="deploy-boundary ${stressed?'stress':''}"><span>one deployable</span><div class="module-grid">${['Orders','Payments','Inventory','Users'].map(x=>N(x)).join('')}</div></div><p class="viz-note">${stressed?'Stress case: one hot module can force scaling the whole deployable. Strong internal boundaries still keep extraction possible.':'Modules share a process/deployment boundary but communicate through explicit contracts.'}</p>`;
+    case 'arch-microservices':
+      return `<div class="arch-row center">${N('Client')}${C()}${N('Gateway','dark')}</div><div class="service-grid">${['Orders','Payments','Inventory'].map((x,i)=>`<div>${N(x,stressed&&i===1?'stress':'')}${C('↓',true)}${N(x+' DB','data')}</div>`).join('')}</div><p class="viz-note">${stressed?'Payments is failing: callers need timeouts, isolation and observability across service boundaries.':'Each service owns deployment and data; the price is distributed coordination.'}</p>`;
+    case 'arch-event':
+      return `<div class="arch-row center producers">${N('Producer A')}${N('Producer B')}</div>${C('↓',true)}<div class="broker ${stressed?'stress':''}">Event broker <i></i></div>${C('↓',true)}<div class="arch-row center consumers">${N('Email')}${N('Analytics')}${N('Loyalty')}</div><p class="viz-note">${stressed?'Stress case: one consumer is offline. Durable delivery, retries and replay policy decide what happens next.':'Producers publish facts without knowing every consumer.'}</p>`;
+    case 'arch-queue':
+      return `<div class="arch-row center">${N('Web')}${C()}${N(stressed?'Queue: backlog ↑':'Queue','queue')}${C()}${N(stressed?'Workers × 4':'Workers × 2','worker')}</div><div class="queue-dots">${Array.from({length:stressed?14:6},()=>'<i></i>').join('')}</div><p class="viz-note">The queue absorbs bursts; worker capacity determines drain rate.</p>`;
+    case 'arch-sync-async':
+      return `<div class="two-lanes"><div><strong>Synchronous path</strong><div class="arch-row">${N('Client')}${C()}${N('Decision')}${C()}${N('Response')}</div></div><div><strong>Asynchronous continuation</strong><div class="arch-row">${N('Event')}${C()}${N('Broker')}${C()}${N(stressed?'Consumer retry':'Consumer')}</div></div></div>`;
+    case 'arch-compute':
+      return `<div class="compute-grid">${[['VM','host control','you manage OS/runtime'],['Container','portable service','you manage image/orchestration'],['Function','event/request','provider manages servers']].map(([a,b,d],i)=>`<div class="${stressed&&i===2?'stress':''}"><b>${a}</b><span>${b}</span><small>${d}</small></div>`).join('')}</div><p class="viz-note">${stressed?'Stress case: a long-running/high-utilization workload can make per-invocation serverless economics or limits unattractive.':'Choose by workload shape, control needs and operations—not by platform fashion.'}</p>`;
+    case 'arch-serverless':
+      return `<div class="arch-row center">${N('Event')}${C('',true)}${N('Function','function')}${C()}${N('Managed state','data')}${C()}${N('Next event')}</div><p class="viz-note">${stressed?'Failure/duplicate case: idempotency and durable orchestration decide whether repeated delivery is safe.':'Short-lived compute reacts to events while durable state lives outside the runtime.'}</p>`;
+    case 'arch-k8s':
+      return `<div class="k8s-box"><div class="control-plane">control plane · desired state</div><div class="node-grid">${[['Deployment','API replicas'],['StatefulSet','stable identity'],['DaemonSet','node agent'],['Job','run to completion']].map(([a,b])=>`<div><b>${a}</b><span>${b}</span></div>`).join('')}</div></div><p class="viz-note">${stressed?'A node disappears: controllers create replacement Pods according to workload semantics; durable storage/identity still need design.':'The controller contract—not the container image—defines lifecycle behavior.'}</p>`;
+    case 'arch-state':
+      return `<div class="state-compare"><div><b>Accidental local state</b>${N('Replica A: session')}${N(stressed?'Replica B: missing':'Replica B')}</div><div><b>External durable state</b><div class="arch-row">${N('Replica A')}${N('Replica B')}</div>${C('↓')}${N('Shared state','data')}</div></div>`;
+    case 'arch-cqrs':
+      return `<div class="cqrs"><div class="arch-row">${N('Command')}${C()}${N('Write model')}${C()}${N('Write store','data')}</div><div class="projection-arrow">${C('events / replication',true)}</div><div class="arch-row">${N('Query')}${C()}${N(stressed?'Read model: lagging':'Read model')}${C()}${N('Read store','data')}</div></div><p class="viz-note">The key trade-off is independent optimization versus synchronization/freshness complexity.</p>`;
+    case 'arch-event-source':
+      return `<div class="event-stream">${['OrderCreated','PaymentCaptured','Packed','Shipped'].map((x,i)=>`<div class="${stressed&&i===3?'stress':''}"><span>${i+1}</span>${x}</div>`).join('')}</div>${C('↓ replay / project',true)}${N(stressed?'Projection needs rebuild':'Current order: SHIPPED','data')}`;
+    case 'arch-gateway':
+      return `<div class="arch-row center clients">${N('Web')}${N('Mobile')}</div>${C('↓')}<div class="gateway ${stressed?'stress':''}">Gateway / BFF</div>${C('↓')}<div class="service-grid small">${['Orders','Users','Search'].map(x=>N(x)).join('')}</div><p class="viz-note">${stressed?'Risk: domain logic accumulates here and turns the gateway into a new monolith.':'Keep edge composition/policy here; keep domain ownership behind it.'}</p>`;
+    case 'arch-batch-stream':
+      return `<div class="two-lanes"><div><strong>Batch</strong><div class="batch-box">${Array.from({length:8},()=>'<i></i>').join('')}<span>schedule → process chunk</span></div></div><div><strong>Stream</strong><div class="stream-box">${Array.from({length:8},()=>'<i></i>').join('')}<span>continuous events → continuous reaction</span></div></div></div><p class="viz-note">${stressed?'Late/out-of-order events force explicit event-time and replay rules in streaming systems.':'Start from freshness requirements; many mature systems use both.'}</p>`;
+    case 'arch-cache':
+      return `<div class="cache-flow"><div class="arch-row">${N('Request')}${C()}${N(stressed?'Cache MISS':'Cache HIT','cache')}${C()}${N(stressed?'Database':'Return','data')}</div>${stressed?'<div class="stampede">many simultaneous misses → origin pressure</div>':''}</div>`;
+    case 'arch-big-compute':
+      return `<div class="compute-fan"><div class="coordinator">partition</div>${C('↓',true)}<div class="worker-grid">${Array.from({length:8},(_,i)=>`<i class="${stressed&&i>4?'idle':''}">W${i+1}</i>`).join('')}</div>${C('↓ reduce')}<div class="coordinator">result</div></div><p class="viz-note">${stressed?'Serial work and communication cap speedup even when more workers exist.':'Parallel resources help only when enough useful work can run independently.'}</p>`;
+    case 'arch-scale':
+      return `<div class="scale-compare"><div><strong>Scale up</strong><div class="server tall">bigger server</div></div><div><strong>Scale out</strong><div class="replicas">${Array.from({length:stressed?6:3},()=>'<div class="server">replica</div>').join('')}</div></div></div><p class="viz-note">Horizontal scale adds distribution and state questions; vertical scale keeps a larger single failure domain.</p>`;
+    default:
+      return `<div class="arch-row center">${N('Input')}${C('',true)}${N('Boundary')}${C()}${N(stressed?'Failure path':'Outcome')}</div>`;
+  }
+}
