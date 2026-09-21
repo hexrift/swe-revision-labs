@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { TOPICS, LESSONS, getLesson, lessonsFor } from './curriculum.js';
+import { TOPIC_QUIZZES } from './quizzes.js';
 
 assert.ok(TOPICS.length >= 10, 'expected comprehensive topic index');
 assert.ok(LESSONS.length >= 100, 'expected comprehensive lesson library');
@@ -23,6 +24,17 @@ for(const lesson of LESSONS){
   }
 }
 for(const topic of TOPICS) assert.ok(lessonsFor(topic.id).length>0, `empty topic ${topic.id}`);
+assert.equal(TOPIC_QUIZZES.length,TOPICS.length,'every topic needs one end-of-topic quiz');
+for(const topic of TOPICS){
+  const quiz=TOPIC_QUIZZES.find(item=>item.topic===topic.id);
+  assert.ok(quiz,`missing quiz for ${topic.id}`);
+  assert.ok(quiz.title && quiz.questions.length>=3,`incomplete quiz for ${topic.id}`);
+  for(const item of quiz.questions){
+    assert.ok(item.prompt && item.options.length>=4,`incomplete quiz question in ${topic.id}`);
+    assert.ok(Number.isInteger(item.answer)&&item.answer>=0&&item.answer<item.options.length,`bad quiz answer in ${topic.id}`);
+    assert.ok(item.explanation,`missing quiz explanation in ${topic.id}`);
+  }
+}
 assert.ok(LESSONS.some(x=>x.id==='closures'));
 assert.ok(LESSONS.some(x=>x.id==='event-loop'));
 assert.ok(LESSONS.some(x=>x.id==='dom-tree'));
