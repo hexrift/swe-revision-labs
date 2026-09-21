@@ -65,3 +65,7 @@ p code,label code{display:inline;padding:2px 5px;line-height:1.35}
 .empty-state{padding:28px 18px;text-align:center;color:var(--muted)}
 .empty-state strong{display:block;color:var(--ink);font-size:13px;margin-bottom:6px}
 .empty-state p{font-size:11px;line-height:1.5;margin:0 auto 14px;max-width:38ch}
+
+/* A closed drawer must be unreachable by keyboard and hidden from assistive tech, not just translated off-screen. */
+.drawer{visibility:hidden;transition:transform .3s cubic-bezier(.22,.8,.2,1),opacity .24s ease,visibility .3s}
+.drawer.open{visibility:visible}
