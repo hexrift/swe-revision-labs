@@ -1,17 +1,21 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
-
-const source = await fs.readFile(new URL('./app.js', import.meta.url), 'utf8');
-
-assert.match(source, /renderCodeVisual, renderInterviewVisual, renderArchitectureVisual/);
-assert.match(source, /if \(pattern\.category === 'architecture'\) return renderArchitectureVisual/);
-assert.match(source, /if \(pattern\.interviewModel\) return renderInterviewVisual/);
-assert.match(source, /if \(location\.hash === target\)[\s\S]*?render\(\)/);
-assert.match(source, /syncStateToRoute\(state, r, getPattern\)/);
-assert.match(source, /data-mastery-index/);
-assert.match(source, /state\.scenarios\[pattern\.id\]/);
-assert.match(source, /document\.body\.classList\.remove\('drawer-open'\)/);
-assert.match(source, /unregisterLegacyServiceWorkers\(\)/);
-assert.match(source, /SWE Revision Labs render failed/);
-
+const source=await fs.readFile(new URL('./app.js',import.meta.url),'utf8');
+assert.match(source,/reduceState\(state,action,CTX\)/);
+assert.match(source,/normalizeState\(/);
+assert.match(source,/if\(location\.hash===target\) renderApp\(\)/);
+assert.match(source,/root\.addEventListener\('click'/);
+assert.match(source,/runWorkerCode/);
+assert.match(source,/runDomExample/);
+assert.match(source,/nodeProbeFor/);
+assert.match(source,/renderBrowserMetrics/);
+assert.match(source,/renderNodeMetrics/);
+assert.match(source,/data-search/);
+assert.match(source,/data-mastery/);
+assert.match(source,/data-debug-answer/);
+assert.match(source,/data-import-node-metrics/);
+assert.match(source,/serviceWorker\.getRegistrations/);
+assert.doesNotMatch(source,/python/i);
+assert.doesNotMatch(source,/typescript/i);
+assert.doesNotMatch(source,/conceptual model · not a profiler/);
 console.log('Application integration contracts passed.');

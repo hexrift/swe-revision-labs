@@ -1,9 +1,9 @@
 {
-  "name": "SWE Revision Labs",
-  "short_name": "SWE Labs",
-  "start_url": "./",
-  "display": "standalone",
-  "background_color": "#f4f4f1",
-  "theme_color": "#f4f4f1",
-  "description": "Focused software engineering revision through sourced poor/better code patterns and interactive visual models."
+  "name":"SWE Revision Labs — JavaScript",
+  "short_name":"SWE JS Labs",
+  "start_url":"./",
+  "display":"standalone",
+  "background_color":"#f3f3ef",
+  "theme_color":"#f3f3ef",
+  "description":"JavaScript language, browser runtime and Node.js revision sourced from MDN and official Node.js documentation."
 }

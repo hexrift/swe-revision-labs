@@ -1,0 +1,2 @@
+export const R=(cpu=0,heap=0,stack=0,queue=0,dom=0,network=0,native=0,threads=0)=>({cpu,heap,stack,queue,dom,network,native,threads});
+export const L=(id,topic,title,source,summary,bad,good,code,visual,resources,traps=[],tips=[],runner='worker')=>({id,topic,title,source,summary,compare:{bad,good},code,visual,resources,traps,tips,runner});

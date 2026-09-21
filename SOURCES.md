@@ -1,14 +1,20 @@
-# Source families
+# Sources
 
-SWE Revision Labs uses source links inside the relevant labs. Core source families include:
+SWE Revision Labs intentionally uses only two source families:
 
-- MIT OpenCourseWare and *Introduction to Algorithms* for algorithmic analysis and data structures.
-- MDN, Node.js, TypeScript and Python official documentation for language/runtime behaviour.
-- IETF RFC 9110 (HTTP), RFC 6455 (WebSocket), and RFC 8446 (TLS 1.3) for protocol semantics.
-- PostgreSQL documentation for database behaviour and terminology.
-- Google Site Reliability Engineering and Amazon Builders' Library for reliability and large-scale operational patterns.
-- OWASP Top 10 / ASVS and NIST SSDF for application security and secure development.
-- Martin Fowler's architecture catalogue and Martin Kleppmann's *Designing Data-Intensive Applications* for architectural/distributed-systems models.
-- Model Context Protocol specification and OpenAI developer guidance for agent/tool architecture and AI safety boundaries.
+1. **MDN Web Docs** — JavaScript language semantics, browser/Web APIs, JavaScript debugging and browser performance APIs.
+   - JavaScript Guide: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide
+   - JavaScript execution model: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Execution_model
+   - JavaScript debugging: https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/Debugging_JavaScript
+   - JavaScript errors: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Errors
+   - Performance API: https://developer.mozilla.org/en-US/docs/Web/API/Performance_API
 
-The app presents engineering patterns as context-dependent trade-offs rather than universal prescriptions.
+2. **Official Node.js documentation** — Node-specific runtime, process/OS resources, performance, diagnostics and debugging.
+   - API index: https://nodejs.org/api/
+   - Process metrics: https://nodejs.org/api/process.html
+   - Performance hooks: https://nodejs.org/api/perf_hooks.html
+   - Inspector/profilers: https://nodejs.org/api/inspector.html
+   - Debugger: https://nodejs.org/api/debugger.html
+   - Diagnostic reports: https://nodejs.org/api/report.html
+
+Every lesson stores its own exact source URL and renders that reference in the lesson UI. Code examples are compact teaching adaptations rather than copied documentation examples.
