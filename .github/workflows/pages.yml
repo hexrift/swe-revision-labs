@@ -3,22 +3,20 @@ name: Deploy SWE Revision Labs to GitHub Pages
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  validate:
+    name: Validate source and contracts
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,6 +28,21 @@ jobs:
           done
       - name: Run curriculum/state/application contracts
         run: npm test
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload static site

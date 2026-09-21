@@ -56,3 +56,12 @@
   .actual-head{display:block}
   .actual-head>span{display:inline-block;margin-top:8px}
 }
+
+/* Keep keyboard focus visible and inline code from breaking explanatory copy. */
+:focus-visible{outline:3px solid #2458d6!important;outline-offset:3px}
+.search:focus-within{outline:3px solid #2458d6;outline-offset:3px}
+pre code{display:block}
+p code,label code{display:inline;padding:2px 5px;line-height:1.35}
+.empty-state{padding:28px 18px;text-align:center;color:var(--muted)}
+.empty-state strong{display:block;color:var(--ink);font-size:13px;margin-bottom:6px}
+.empty-state p{font-size:11px;line-height:1.5;margin:0 auto 14px;max-width:38ch}

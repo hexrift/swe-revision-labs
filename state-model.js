@@ -49,12 +49,19 @@ export function normalizeState(raw,lessons=[],topics=[]){
     search:typeof source.search==='string'?source.search.slice(0,120):'',
     metrics:record(source.metrics,validLessons,cleanMetrics),
     nodeMetrics:record(source.nodeMetrics,validLessons,cleanMetrics),
-    debug:record(source.debug,validLessons,v=>obj(v)?{answer:Number.isInteger(v.answer)?v.answer:null,revealed:!!v.revealed}:undefined)
+    debug:record(source.debug,validLessons,(value,key)=>{
+      if(!obj(value)) return undefined;
+      const lesson=lessons.find(item=>item.id===key);
+      const optionCount=lesson?.debug?.options?.length??0;
+      const answer=Number.isInteger(value.answer)&&optionCount>0&&value.answer>=0&&value.answer<optionCount?value.answer:null;
+      return {answer,revealed:answer!==null&&!!value.revealed};
+    })
   };
 }
 
 export function reduceState(state,action,{lessons=[],topics=[]}={}){
   const next={...state};
+  const validLesson=lessons.some(lesson=>lesson.id===action.id);
   switch(action.type){
     case 'OPEN_LESSON':{
       const lesson=lessons.find(x=>x.id===action.id);
@@ -65,21 +72,27 @@ export function reduceState(state,action,{lessons=[],topics=[]}={}){
       if(action.id===''||topics.some(x=>x.id===action.id)) next.topic=action.id;
       return next;
     case 'SET_SEARCH': next.search=String(action.value||'').slice(0,120); return next;
-    case 'SET_CODE': next.code={...state.code,[action.id]:String(action.value??'')}; return next;
-    case 'RESET_CODE': { next.code={...state.code}; delete next.code[action.id]; return next; }
-    case 'TOGGLE_COMFORT': next.comfortable={...state.comfortable,[action.id]:!state.comfortable[action.id]}; return next;
+    case 'SET_CODE': if(!validLesson)return state; next.code={...state.code,[action.id]:String(action.value??'')}; return next;
+    case 'RESET_CODE': { if(!validLesson)return state; next.code={...state.code}; delete next.code[action.id]; return next; }
+    case 'TOGGLE_COMFORT': if(!validLesson)return state; next.comfortable={...state.comfortable,[action.id]:!state.comfortable[action.id]}; return next;
     case 'SET_MASTERY': {
+      if(!validLesson||!Number.isInteger(action.index)||action.index<0||action.index>3)return state;
       const current=state.mastery[action.id]||[false,false,false,false];
       const values=[...current]; values[action.index]=!!action.value;
       next.mastery={...state.mastery,[action.id]:values}; return next;
     }
-    case 'SET_METRICS': next.metrics={...state.metrics,[action.id]:cleanMetrics(action.value)}; return next;
-    case 'SET_NODE_METRICS': next.nodeMetrics={...state.nodeMetrics,[action.id]:cleanMetrics(action.value)}; return next;
+    case 'SET_METRICS': if(!validLesson)return state; next.metrics={...state.metrics,[action.id]:cleanMetrics(action.value)}; return next;
+    case 'SET_NODE_METRICS': if(!validLesson)return state; next.nodeMetrics={...state.nodeMetrics,[action.id]:cleanMetrics(action.value)}; return next;
     case 'SET_DEBUG_ANSWER': {
+      const lesson=lessons.find(item=>item.id===action.id);
+      const answer=Number(action.answer);
+      const optionCount=lesson?.debug?.options?.length??0;
+      if(optionCount===0||!Number.isInteger(answer)||answer<0||answer>=optionCount)return state;
       const current=state.debug[action.id]||{answer:null,revealed:false};
-      next.debug={...state.debug,[action.id]:{...current,answer:Number(action.answer),revealed:false}}; return next;
+      next.debug={...state.debug,[action.id]:{...current,answer,revealed:false}}; return next;
     }
     case 'REVEAL_DEBUG': {
+      if(!validLesson||state.debug[action.id]?.answer===null||state.debug[action.id]?.answer===undefined)return state;
       const current=state.debug[action.id]||{answer:null,revealed:false};
       next.debug={...state.debug,[action.id]:{...current,revealed:true}}; return next;
     }

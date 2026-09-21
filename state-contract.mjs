@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createDefaultState, normalizeState, reduceState, countComfortable, STATE_SCHEMA_VERSION } from './state-model.js';
 
-const lessons=[{id:'a',topic:'one'},{id:'b',topic:'two'}];
+const lessons=[{id:'a',topic:'one',debug:{options:['a','b','c','d']}},{id:'b',topic:'two'}];
 const topics=[{id:'one'},{id:'two'}];
 let state=normalizeState({
   current:'b',topic:'removed',comfortable:{a:true,removed:true},code:{a:'x',removed:'y'},
@@ -26,6 +26,9 @@ state=reduceState(state,{type:'SET_METRICS',id:'a',value:{duration:5}},{lessons,
 state=reduceState(state,{type:'SET_NODE_METRICS',id:'a',value:{memory:{rss:200}}},{lessons,topics});assert.equal(state.nodeMetrics.a.memory.rss,200);
 state=reduceState(state,{type:'SET_DEBUG_ANSWER',id:'a',answer:1},{lessons,topics});assert.equal(state.debug.a.answer,1);assert.equal(state.debug.a.revealed,false);
 state=reduceState(state,{type:'REVEAL_DEBUG',id:'a'},{lessons,topics});assert.equal(state.debug.a.revealed,true);
+assert.equal(reduceState(state,{type:'SET_DEBUG_ANSWER',id:'a',answer:99},{lessons,topics}),state);
+assert.equal(reduceState(state,{type:'SET_MASTERY',id:'a',index:4,value:true},{lessons,topics}),state);
+assert.equal(reduceState(state,{type:'SET_CODE',id:'removed',value:'bad'},{lessons,topics}),state);
 state=reduceState(state,{type:'SELECT_TOPIC',id:''},{lessons,topics});assert.equal(state.topic,'');
 assert.deepEqual(createDefaultState(lessons,topics).comfortable,{});
 console.log('State contracts passed.');

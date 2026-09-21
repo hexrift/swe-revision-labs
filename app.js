@@ -8,6 +8,7 @@ const STORE='swe-revision-labs:javascript-v3';
 const CTX={lessons:LESSONS,topics:TOPICS};
 let state=loadState();
 let running=false;
+let drawerReturnFocus=null;
 
 function escapeHtml(value=''){
   return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -45,7 +46,7 @@ function sourceDomain(url){try{return new URL(url).hostname.replace(/^www\./,'')
 
 function icon(){return `<span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>`}
 function drawer(){
-  return `<div class="drawer-backdrop" data-drawer-backdrop></div><aside class="drawer" data-drawer aria-hidden="true">
+  return `<div class="drawer-backdrop" data-drawer-backdrop></div><aside id="site-drawer" class="drawer" data-drawer role="dialog" aria-modal="true" aria-label="JavaScript index" aria-hidden="true">
     <div class="drawer-head"><div><p class="eyebrow">SWE Revision Labs</p><h2>JavaScript index</h2></div><button data-drawer-close class="icon-button" aria-label="Close menu">×</button></div>
     <nav class="drawer-nav">
       <button data-nav="home"><span>01</span><b>Learn</b><small>Continue your current concept</small><em>→</em></button>
@@ -55,7 +56,7 @@ function drawer(){
   </aside>`;
 }
 function chrome(content){
-  return `<div class="site"><header class="topbar"><button class="brand" data-nav="home">${icon()}<span>SWE Revision Labs</span></button><button class="menu-button" data-drawer-open aria-label="Open menu"><span></span><span></span><span></span></button></header>${content}${drawer()}</div>`;
+  return `<div class="site"><header class="topbar"><button class="brand" data-nav="home">${icon()}<span>SWE Revision Labs</span></button><button class="menu-button" data-drawer-open aria-controls="site-drawer" aria-expanded="false" aria-label="Open menu"><span></span><span></span><span></span></button></header>${content}${drawer()}</div>`;
 }
 
 function homeView(){
@@ -64,7 +65,7 @@ function homeView(){
   const topicCards=TOPICS.map(topic=>{const p=topicProgress(topic);return `<button class="topic-card" data-topic="${topic.id}"><span class="topic-count">${String(TOPICS.indexOf(topic)+1).padStart(2,'0')}</span><span class="topic-copy"><strong>${escapeHtml(topic.title)}</strong><small>${escapeHtml(topic.description)}</small></span><span class="topic-progress">${p.done}/${p.total}</span></button>`}).join('');
   return chrome(`<main class="page home-page">
     <section class="hero reveal"><p class="eyebrow">JavaScript · browser + Node.js</p><h1>Understand the language.<br>Then understand the machine.</h1><p class="lead">From primitives and closures to the browser render pipeline, Node's event loop, heap pressure, buffers, streams and OS resources. Every lesson is sourced only from MDN or the official Node.js docs.</p>
-      <div class="progress-block"><div><span>Comfortable</span><strong>${done}/${LESSONS.length}</strong></div><div class="progress-line"><i style="width:${percent(done,LESSONS.length)}%"></i></div></div>
+      <div class="progress-block"><div><span>Comfortable</span><strong>${done}/${LESSONS.length}</strong></div><div class="progress-line" role="progressbar" aria-label="Lessons marked comfortable" aria-valuemin="0" aria-valuemax="${LESSONS.length}" aria-valuenow="${done}"><i style="width:${percent(done,LESSONS.length)}%"></i></div></div>
     </section>
     <section class="continue-card reveal delay-1"><div><span class="tag">Continue</span><h2>${escapeHtml(resume.title)}</h2><p>${escapeHtml(getTopic(resume.topic)?.title||'')} · ${sourceName(resume.source)}</p></div><div class="continue-flow"><span>concept</span><b>→</b><span>code</span><b>→</b><span>run</span><b>→</b><span>machine</span></div><button class="primary" data-lesson="${resume.id}">Open lesson</button></section>
     <section class="section reveal delay-2"><div class="section-head"><div><p class="eyebrow">Curriculum</p><h2>Pick one topic</h2></div><button class="text-button" data-nav="index">Full index →</button></div><div class="topic-grid">${topicCards}</div></section>
@@ -84,12 +85,16 @@ function filteredLessons(){
 function indexRows(items){
   return items.map((lesson,index)=>`<button class="lesson-row" data-lesson="${lesson.id}" data-search-text="${escapeHtml((lesson.title+' '+lesson.summary).toLowerCase())}"><span class="row-index">${String(index+1).padStart(2,'0')}</span><span><strong>${escapeHtml(lesson.title)}</strong><small>${escapeHtml(sourceName(lesson.source))} · ${escapeHtml(sourceDomain(lesson.source))}</small></span><em class="done-dot ${state.comfortable[lesson.id]?'done':''}">${state.comfortable[lesson.id]?'✓':''}</em></button>`).join('');
 }
+function indexResults(items){
+  return items.length?indexRows(items):'<div class="empty-state"><strong>No lessons match that search.</strong><p>Try a broader concept or clear the search to browse the full index.</p><button class="secondary" data-clear-search>Clear search</button></div>';
+}
 function indexView(){
   const selected=getTopic(state.topic)||TOPICS[0];
   const items=filteredLessons();
-  return chrome(`<main class="page index-page"><section class="index-head reveal"><p class="eyebrow">Complete JavaScript index</p><h1>${LESSONS.length} lessons</h1><p class="lead">Search by concept or work topic-by-topic. Every example carries its exact MDN or Node.js source.</p><label class="search"><span>⌕</span><input data-search value="${escapeHtml(state.search)}" placeholder="closures, heap, fetch, streams…" autocomplete="off"></label></section>
+  const rows=indexResults(items);
+  return chrome(`<main class="page index-page"><section class="index-head reveal"><p class="eyebrow">Complete JavaScript index</p><h1>${LESSONS.length} lessons</h1><p class="lead">Search by concept or work topic-by-topic. Every example carries its exact MDN or Node.js source.</p><label class="search"><span aria-hidden="true">⌕</span><input aria-label="Search lessons" data-search value="${escapeHtml(state.search)}" placeholder="closures, heap, fetch, streams…" autocomplete="off"></label></section>
     <div class="topic-scroller reveal delay-1"><button class="chip ${state.topic===''?'active':''}" data-topic="">All</button>${TOPICS.map(topic=>`<button class="chip ${state.topic===topic.id?'active':''}" data-topic="${topic.id}">${escapeHtml(topic.title)}</button>`).join('')}</div>
-    <section class="index-list reveal delay-2"><div class="list-head"><strong>${state.topic?escapeHtml(selected.title):'All topics'}</strong><span data-result-count>${items.length} lessons</span></div><div data-index-rows>${indexRows(items)}</div></section>
+    <section class="index-list reveal delay-2"><div class="list-head"><strong>${state.topic?escapeHtml(selected.title):'All topics'}</strong><span data-result-count>${items.length} lessons</span></div><div data-index-rows>${rows}</div></section>
   </main>`);
 }
 
@@ -117,16 +122,16 @@ function runnerBlock(lesson){
     const imported=state.nodeMetrics[lesson.id];
     return `<section class="runner-card reveal"><div class="runner-head"><div><p class="eyebrow">Run on your real Node process</p><h2>Actual Node resource probe</h2></div><span>official process/perf metrics</span></div>
       <p class="runner-note">GitHub Pages cannot execute Node or read your OS process counters. Save this as <code>resource-probe.mjs</code>, run <code>node resource-probe.mjs</code>, then paste the final JSON object below.</p>
-      <textarea class="code-editor node-probe" readonly spellcheck="false">${escapeHtml(probe)}</textarea>
-      <label class="node-import"><span>Paste Node probe JSON</span><textarea data-node-metrics-input spellcheck="false" placeholder='{"node":"v26.x", "memory":{...}}'>${imported?escapeHtml(JSON.stringify(imported,null,2)):''}</textarea></label>
+      <textarea class="code-editor node-probe" aria-label="Generated Node.js resource probe" readonly spellcheck="false">${escapeHtml(probe)}</textarea>
+      <label class="node-import"><span>Paste Node probe JSON</span><textarea aria-label="Node probe JSON" data-node-metrics-input spellcheck="false" placeholder='{"node":"v26.x", "memory":{...}}'>${imported?escapeHtml(JSON.stringify(imported,null,2)):''}</textarea></label>
       <div class="runner-actions"><button class="primary" data-import-node-metrics>Visualize measured Node resources</button></div>
       <div class="actual-resource-host" data-actual-resource>${renderNodeMetrics(imported)}</div>
     </section>`;
   }
   return `<section class="runner-card reveal"><div class="runner-head"><div><p class="eyebrow">Run the JavaScript</p><h2>${dom?'Browser main-thread sandbox':'Disposable JavaScript Worker'}</h2></div><span>${dom?'DOM + long-task measurements':'wall time + event-loop delay'}</span></div>
-    <textarea class="code-editor" data-code-editor spellcheck="false">${escapeHtml(code)}</textarea>
+    <textarea class="code-editor" aria-label="JavaScript editor" data-code-editor spellcheck="false">${escapeHtml(code)}</textarea>
     <div class="runner-actions"><button class="secondary" data-reset-code>Reset</button><button class="primary" data-run-code>${dom?'Run in browser sandbox':'Run JavaScript'}</button></div>
-    <div class="run-layout"><pre class="run-output" data-run-output>Ready.</pre><div class="sandbox-host" data-sandbox-host>${dom?'<span>Sandboxed browser output appears here.</span>':'<span>Execution is isolated from the app.</span>'}</div></div>
+    <div class="run-layout"><pre class="run-output" data-run-output role="status" aria-live="polite" aria-atomic="true">Ready.</pre><div class="sandbox-host" data-sandbox-host aria-label="Sandbox output">${dom?'<span>Sandboxed browser output appears here.</span>':'<span>Execution is isolated from the app.</span>'}</div></div>
     <div class="actual-resource-host" data-actual-resource>${renderBrowserMetrics(state.metrics[lesson.id])}</div>
   </section>`;
 }
@@ -167,9 +172,23 @@ function renderApp(){
   }catch(error){console.error(error);root.innerHTML=errorView(error)}
 }
 
-function openDrawer(){const d=root.querySelector('[data-drawer]'),b=root.querySelector('[data-drawer-backdrop]'); if(!d||!b)return;d.classList.add('open');b.classList.add('open');d.setAttribute('aria-hidden','false');document.body.classList.add('drawer-open')}
-function closeDrawer(){document.body.classList.remove('drawer-open');const d=root.querySelector('[data-drawer]'),b=root.querySelector('[data-drawer-backdrop]');if(d){d.classList.remove('open');d.setAttribute('aria-hidden','true')}if(b)b.classList.remove('open')}
-function updateIndexRows(){if(route().view!=='index')return;const host=root.querySelector('[data-index-rows]');const count=root.querySelector('[data-result-count]');if(host)host.innerHTML=indexRows(filteredLessons());if(count)count.textContent=`${filteredLessons().length} lessons`}
+function openDrawer(){
+  const d=root.querySelector('[data-drawer]'),b=root.querySelector('[data-drawer-backdrop]'),menu=root.querySelector('[data-drawer-open]');
+  if(!d||!b)return;
+  drawerReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null;
+  d.classList.add('open');b.classList.add('open');d.setAttribute('aria-hidden','false');menu?.setAttribute('aria-expanded','true');document.body.classList.add('drawer-open');
+  requestAnimationFrame(()=>d.querySelector('[data-drawer-close]')?.focus());
+}
+function closeDrawer(){
+  document.body.classList.remove('drawer-open');
+  const d=root.querySelector('[data-drawer]'),b=root.querySelector('[data-drawer-backdrop]'),menu=root.querySelector('[data-drawer-open]');
+  if(d){d.classList.remove('open');d.setAttribute('aria-hidden','true')}
+  if(b)b.classList.remove('open');
+  menu?.setAttribute('aria-expanded','false');
+  if(drawerReturnFocus&&document.contains(drawerReturnFocus))drawerReturnFocus.focus();
+  drawerReturnFocus=null;
+}
+function updateIndexRows(){if(route().view!=='index')return;const items=filteredLessons();const host=root.querySelector('[data-index-rows]');const count=root.querySelector('[data-result-count]');if(host)host.innerHTML=indexResults(items);if(count)count.textContent=`${items.length} lessons`}
 
 async function runCurrent(portable=false){
   if(running)return;
@@ -178,7 +197,9 @@ async function runCurrent(portable=false){
   const editor=root.querySelector('[data-code-editor]');
   const sandbox=root.querySelector('[data-sandbox-host]');
   if(!output||!editor)return;
-  running=true; output.textContent='Running…';
+  const runButton=root.querySelector('[data-run-code]');
+  running=true; output.textContent='Running…'; output.classList.remove('failed');
+  if(runButton){runButton.disabled=true;runButton.setAttribute('aria-busy','true')}
   try{
     let result;
     if(lesson.runner==='dom'&&!portable) result=await runDomExample(editor.value,sandbox);
@@ -191,7 +212,10 @@ async function runCurrent(portable=false){
     output.classList.toggle('failed',!result.ok);
     const metricsHost=root.querySelector('[data-actual-resource]');
     if(metricsHost) metricsHost.innerHTML=renderBrowserMetrics(result);
-  }finally{running=false}
+  }finally{
+    running=false;
+    if(runButton){runButton.disabled=false;runButton.removeAttribute('aria-busy')}
+  }
 }
 
 root.addEventListener('click',event=>{
@@ -202,9 +226,10 @@ root.addEventListener('click',event=>{
   if(target.dataset.nav){event.preventDefault();navigate(target.dataset.nav);return}
   if(target.hasAttribute('data-topic')){
     const id=target.dataset.topic||'';
-    if(id)dispatch({type:'SELECT_TOPIC',id},{render:false});else{state={...state,topic:''};saveState()}
+    dispatch({type:'SELECT_TOPIC',id},{render:false});
     closeDrawer();navigate('index');return;
   }
+  if(target.hasAttribute('data-clear-search')){dispatch({type:'SET_SEARCH',value:''});return}
   if(target.dataset.lesson){dispatch({type:'OPEN_LESSON',id:target.dataset.lesson},{render:false});navigate('lesson/'+target.dataset.lesson);return}
   if(target.hasAttribute('data-run-code')){runCurrent(false);return}
   if(target.hasAttribute('data-run-portable')){runCurrent(true);return}
@@ -230,7 +255,11 @@ window.addEventListener('keydown',event=>{if(event.key==='Escape')closeDrawer()}
 
 async function removeLegacyWorkers(){
   if(!('serviceWorker'in navigator))return;
-  try{const regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(r=>r.unregister()))}catch{}
+  try{
+    const appScope=new URL('./',location.href).href;
+    const regs=await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.filter(registration=>registration.scope===appScope).map(registration=>registration.unregister()));
+  }catch{}
 }
 removeLegacyWorkers();
 if(!location.hash)location.hash='home';else renderApp();
