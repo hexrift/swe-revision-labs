@@ -125,11 +125,10 @@ try{
   const gutterScroll=await page.evaluate(()=>{
     const editor=document.querySelector('[data-code-editor]');
     const gutter=document.querySelector('[data-code-gutter]');
-    editor.style.height='260px';
-    editor.style.overflowY='auto';
+    editor.closest('.editor-body').style.height='260px';
     editor.value=Array.from({length:80},(_,index)=>`const line${index}= ${index};`).join('\n');
     editor.dispatchEvent(new Event('input',{bubbles:true}));
-    editor.scrollTop=editor.scrollHeight;
+    editor.scrollTop=200;
     editor.dispatchEvent(new Event('scroll'));
     return {editor:editor.scrollTop,gutter:gutter.scrollTop};
   });
