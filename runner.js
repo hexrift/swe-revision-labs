@@ -126,7 +126,7 @@ export function domSource(code,token){
     <\/script></body></html>`;
 }
 
-export function runDomExample(code,host,{timeout=6000}={}){
+export function runDomExample(code,host,{timeout=6000,signal}={}){
   return new Promise(resolve=>{
     host.innerHTML='';
     const iframe=document.createElement('iframe');
@@ -137,21 +137,27 @@ export function runDomExample(code,host,{timeout=6000}={}){
     iframe.srcdoc=domSource(code,token);
     host.append(iframe);
     let settled=false;
-    const cleanup=()=>window.removeEventListener('message',onMessage);
+    const cleanup=()=>{
+      window.removeEventListener('message',onMessage);
+      signal?.removeEventListener('abort',onAbort);
+    };
     const finish=result=>{
       if(settled)return;
       settled=true;
       clearTimeout(timer);
       cleanup();
-      if(result.timeout) iframe.remove();
+      if(result.timeout||result.stopped) iframe.remove();
       resolve(result);
     };
     const onMessage=event=>{
       if(event.source!==iframe.contentWindow||!event.data?.__sweSandbox||event.data.token!==token) return;
       finish(event.data);
     };
+    const onAbort=()=>finish({ok:false,lines:[],error:'Run stopped. The sandbox and all scheduled work were discarded.',stopped:true,duration:0,realm:'browser-main-thread'});
     window.addEventListener('message',onMessage);
+    signal?.addEventListener('abort',onAbort);
     const timer=setTimeout(()=>finish({ok:false,lines:[],error:'Browser example did not finish in time.',timeout:true,duration:timeout,realm:'browser-main-thread'}),timeout);
+    if(signal?.aborted) onAbort();
   });
 }
 

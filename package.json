@@ -2,6 +2,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node curriculum-contract.mjs && node state-contract.mjs && node app-contract.mjs && node runner-contract.mjs"
+    "test": "node curriculum-contract.mjs && node state-contract.mjs && node app-contract.mjs && node runner-contract.mjs",
+    "test:browser": "node browser-contract.mjs"
   }
 }

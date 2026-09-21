@@ -27,6 +27,12 @@ jobs:
           done
       - name: Run curriculum/state/application contracts
         run: npm test
+      - name: Install browser test toolchain
+        run: |
+          npm install --no-save --no-package-lock playwright
+          npx playwright install --with-deps chromium
+      - name: Run browser lifecycle contracts
+        run: npm run test:browser
 
   deploy:
     if: github.event_name != 'pull_request'

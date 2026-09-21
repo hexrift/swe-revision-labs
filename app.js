@@ -8,7 +8,9 @@ const STORE='swe-revision-labs:javascript-v3';
 const CTX={lessons:LESSONS,topics:TOPICS};
 let state=loadState();
 let running=false;
+let domRunController=null;
 let drawerReturnFocus=null;
+const SANDBOX_STOPPED_HTML='<span>Sandbox stopped. Scheduled work was discarded.</span>';
 
 function escapeHtml(value=''){
   return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -190,6 +192,15 @@ function closeDrawer(){
 }
 function updateIndexRows(){if(route().view!=='index')return;const items=filteredLessons();const host=root.querySelector('[data-index-rows]');const count=root.querySelector('[data-result-count]');if(host)host.innerHTML=indexResults(items);if(count)count.textContent=`${items.length} lessons`}
 
+function stopSandbox(){
+  if(domRunController){domRunController.abort();return}
+  const sandbox=root.querySelector('[data-sandbox-host]');
+  if(!sandbox||!sandbox.querySelector('iframe'))return;
+  sandbox.innerHTML=SANDBOX_STOPPED_HTML;
+  const output=root.querySelector('[data-run-output]');
+  if(output){output.textContent='◼ stopped\nThe finished run’s sandbox was torn down; any work it still had scheduled was discarded.';output.classList.remove('failed')}
+}
+
 async function runCurrent(portable=false){
   if(running)return;
   const lesson=currentLesson();
@@ -202,8 +213,17 @@ async function runCurrent(portable=false){
   if(runButton){runButton.disabled=true;runButton.setAttribute('aria-busy','true')}
   try{
     let result;
-    if(lesson.runner==='dom'&&!portable) result=await runDomExample(editor.value,sandbox);
+    if(lesson.runner==='dom'&&!portable){
+      domRunController=new AbortController();
+      result=await runDomExample(editor.value,sandbox,{signal:domRunController.signal});
+    }
     else result=await runWorkerCode(editor.value);
+    if(result.stopped){
+      output.textContent='◼ stopped\nThe sandbox and all scheduled work were discarded.';
+      output.classList.remove('failed');
+      if(sandbox) sandbox.innerHTML=SANDBOX_STOPPED_HTML;
+      return;
+    }
     dispatch({type:'SET_METRICS',id:lesson.id,value:result},{render:false});
     const header=result.ok?'✓ completed':'✕ failed';
     const time=Number.isFinite(result.duration)?`\nwall time: ${result.duration.toFixed(2)} ms`:'';
@@ -214,6 +234,7 @@ async function runCurrent(portable=false){
     if(metricsHost) metricsHost.innerHTML=renderBrowserMetrics(result);
   }finally{
     running=false;
+    domRunController=null;
     if(runButton){runButton.disabled=false;runButton.removeAttribute('aria-busy')}
   }
 }
@@ -232,7 +253,7 @@ root.addEventListener('click',event=>{
   if(target.hasAttribute('data-clear-search')){dispatch({type:'SET_SEARCH',value:''});return}
   if(target.dataset.lesson){dispatch({type:'OPEN_LESSON',id:target.dataset.lesson},{render:false});navigate('lesson/'+target.dataset.lesson);return}
   if(target.hasAttribute('data-run-code')){runCurrent(false);return}
-  if(target.hasAttribute('data-stop-sandbox')){const sandbox=root.querySelector('[data-sandbox-host]');if(sandbox)sandbox.innerHTML='<span>Sandbox stopped. Scheduled work was discarded.</span>';return}
+  if(target.hasAttribute('data-stop-sandbox')){stopSandbox();return}
   if(target.hasAttribute('data-run-portable')){runCurrent(true);return}
   if(target.hasAttribute('data-reset-code')){const lesson=currentLesson();dispatch({type:'RESET_CODE',id:lesson.id},{render:false});const editor=root.querySelector('[data-code-editor]');if(editor)editor.value=lesson.code;return}
   if(target.dataset.debugAnswer!==undefined){dispatch({type:'SET_DEBUG_ANSWER',id:currentLesson().id,answer:Number(target.dataset.debugAnswer)});return}
