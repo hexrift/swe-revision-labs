@@ -1,5 +1,6 @@
 import { TOPICS, LESSONS, getLesson, getTopic, lessonsFor, sourceName } from './curriculum.js';
 import { TOPIC_QUIZZES, getTopicQuiz } from './quizzes.js';
+import { formatJavaScript } from './lesson-utils.js';
 import { createDefaultState, normalizeState, reduceState, countCompletedTopics, countVisited } from './state-model.js';
 import { runWorkerCode, runDomExample, nodeProbeFor } from './runner.js';
 import { renderBrowserMetrics, renderNodeMetrics } from './resource-visuals.js';
@@ -46,85 +47,6 @@ function scrollToPageTop(){
   html.style.scrollBehavior=previousBehavior;
 }
 function currentLesson(){return getLesson(state.current)||LESSONS[0]}
-function formatJavaScript(source=''){
-  const text=String(source).replace(/\r\n?/g,'\n').trim();
-  if(!text||text.includes('\n'))return text;
-  let output='';
-  let indent=0;
-  let parenDepth=0;
-  let quote='';
-  let regex=false;
-  let escaped=false;
-  let lineStart=true;
-  const write=value=>{
-    if(lineStart){
-      if(!value.trim())return;
-      output+='  '.repeat(indent);
-      lineStart=false;
-    }
-    output+=value;
-  };
-  const newline=()=>{
-    output=output.replace(/[ \t]+$/,'');
-    if(!output.endsWith('\n'))output+='\n';
-    lineStart=true;
-  };
-  for(let index=0;index<text.length;index++){
-    const char=text[index];
-    const next=text[index+1];
-    const previous=text[index-1]||'';
-    if(regex){
-      write(char);
-      if(escaped)escaped=false;
-      else if(char==='\\')escaped=true;
-      else if(char==='/')regex=false;
-      continue;
-    }
-    if(quote){
-      write(char);
-      if(escaped)escaped=false;
-      else if(char==='\\')escaped=true;
-      else if(char===quote)quote='';
-      continue;
-    }
-    if(char==='"'||char==="'"||char==='`'){write(char);quote=char;continue}
-    if(char==='/'&&next!=='/'&&next!=='*'&&(!previous||/[([{:;,=!?&|+*%-]/.test(previous))){write(char);regex=true;continue}
-    if(char==='/'&&next==='/'){
-      write('//');
-      index++;
-      while(index+1<text.length)write(text[++index]);
-      break;
-    }
-    if(char==='/'&&next==='*'){
-      write('/*');
-      index++;
-      while(index+1<text.length){
-        const part=text[++index];
-        write(part);
-        if(part==='*'&&text[index+1]==='/'){write('/');index++;break}
-      }
-      continue;
-    }
-    if(char==='('){write(char);parenDepth++;continue}
-    if(char===')'){write(char);parenDepth=Math.max(0,parenDepth-1);continue}
-    if(char==='{'){
-      write(char);
-      indent++;
-      newline();
-      continue;
-    }
-    if(char==='}'){
-      if(!lineStart)newline();
-      indent=Math.max(0,indent-1);
-      write(char);
-      if(![';',',',')',']'].includes(next))newline();
-      continue;
-    }
-    if(char===';'&&parenDepth===0){write(char);newline();continue}
-    write(char);
-  }
-  return output.trim();
-}
 function currentCode(lesson){return formatJavaScript(state.code[lesson.id]??lesson.code)}
 function lineNumbers(code){return code.split('\n').map((_,index)=>`<span>${index+1}</span>`).join('')}
 function editorShell(code,{label='lesson.js',readonly=false,ariaLabel='JavaScript editor'}={}){
@@ -137,7 +59,11 @@ function editorShell(code,{label='lesson.js',readonly=false,ariaLabel='JavaScrip
 }
 function lessonBrief(lesson){
   const tip=lesson.tips?.[0]||'Make the important behaviour explicit so it is easier to review and maintain.';
-  return `<div class="lesson-brief"><div class="lesson-brief-head"><span class="lesson-brief-label">Why the right-hand example is better</span><span class="lesson-brief-tag">read this first</span></div><p class="lesson-brief-summary">${escapeHtml(lesson.summary)}</p><p class="lesson-brief-reason"><strong>What improves:</strong> The clearer version makes the key behaviour visible instead of relying on an implicit rule or hiding the result. ${escapeHtml(tip)}</p></div>`;
+  const debug=lesson.debug;
+  const label=debug?'What this lab is diagnosing':'Why the right-hand example is better';
+  const tag=debug?'diagnose first':'read this first';
+  const reason=debug?`<strong>Start here:</strong> Identify the failure mode before revealing the diagnosis. ${escapeHtml(debug.question)}`:`<strong>What improves:</strong> The clearer version makes the key behaviour visible instead of relying on an implicit rule or hiding the result. ${escapeHtml(tip)}`;
+  return `<div class="lesson-brief"><div class="lesson-brief-head"><span class="lesson-brief-label">${label}</span><span class="lesson-brief-tag">${tag}</span></div><p class="lesson-brief-summary">${escapeHtml(lesson.summary)}</p><p class="lesson-brief-reason">${reason}</p></div>`;
 }
 function firstUnvisited(){return LESSONS.find(x=>!state.visited[x.id])||LESSONS[0]}
 function resumeLesson(){return getLesson(state.current)||firstUnvisited()}
@@ -250,6 +176,7 @@ function syncCodeEditor(){
   if(!editor||!gutter)return;
   const lines=editor.value.split('\n').length;
   gutter.innerHTML=lineNumbers(editor.value);
+  gutter.scrollTop=editor.scrollTop;
   const status=root.querySelector('[data-editor-line-status]');
   if(status)status.textContent=`${lines} ${lines===1?'line':'lines'}`;
 }
@@ -440,6 +367,12 @@ root.addEventListener('input',event=>{
   if(input.matches('[data-code-editor]')){syncCodeEditor();dispatch({type:'SET_CODE',id:currentLesson().id,value:input.value},{render:false});return}
   if(input.matches('[data-search]')){dispatch({type:'SET_SEARCH',value:input.value},{render:false});updateIndexRows();return}
 });
+root.addEventListener('scroll',event=>{
+  const editor=event.target;
+  if(!editor.matches?.('[data-code-editor]'))return;
+  const gutter=root.querySelector('[data-code-gutter]');
+  if(gutter)gutter.scrollTop=editor.scrollTop;
+},true);
 root.addEventListener('click',event=>{if(event.target.matches('[data-drawer-backdrop]'))closeDrawer()});
 window.addEventListener('hashchange',()=>{renderApp();scrollToPageTop()});
 window.addEventListener('keydown',event=>{if(event.key==='Escape')closeDrawer()});

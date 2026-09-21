@@ -122,6 +122,23 @@ try{
   assert.equal(editorPresentation.gutterLines,editorPresentation.editorLines,'the editor gutter must track code lines');
   assert.equal(editorPresentation.workbench,true,'the runner must use the editor workbench');
 
+  const gutterScroll=await page.evaluate(()=>{
+    const editor=document.querySelector('[data-code-editor]');
+    const gutter=document.querySelector('[data-code-gutter]');
+    editor.value=Array.from({length:80},(_,index)=>`const line${index}= ${index};`).join('\n');
+    editor.dispatchEvent(new Event('input',{bubbles:true}));
+    editor.scrollTop=editor.scrollHeight;
+    editor.dispatchEvent(new Event('scroll'));
+    return {editor:editor.scrollTop,gutter:gutter.scrollTop};
+  });
+  assert.ok(gutterScroll.editor>0,'the editor scroll-sync regression setup must overflow');
+  assert.equal(gutterScroll.gutter,gutterScroll.editor,'the line-number gutter must follow editor scrolling');
+
+  await page.goto(`${base}/index.html#lesson/debug-response-json`);
+  const debugBrief=await page.locator('.lesson-brief').textContent();
+  assert.match(debugBrief,/What this lab is diagnosing/,'debug lessons need a diagnostic brief');
+  assert.doesNotMatch(debugBrief,/Why the right-hand example is better/,'debug lessons must not claim to have a right-hand comparison');
+
   await page.evaluate(()=>{document.documentElement.style.scrollBehavior='auto';window.scrollTo(0,document.body.scrollHeight)});
   assert.ok(await page.evaluate(()=>window.scrollY>0),'the navigation regression setup must start below the top');
   await page.click('[data-lesson]');
