@@ -262,7 +262,7 @@ L('request-animation-frame','browser','requestAnimationFrame and visual work',MD
 'requestAnimationFrame schedules a callback before the next repaint, making it the appropriate browser hook for animation updates.',
 `setInterval(()=>box.style.left=(x++)+"px",16);`,
 `function frame(){box.style.transform=\`translateX(\${x++}px)\`; requestAnimationFrame(frame)} requestAnimationFrame(frame);`,
-`document.body.innerHTML='<div id="box" style="width:30px;height:30px;background:#222"></div><p id="status"></p>'; let x=0,frames=0; const box=document.querySelector("#box"); function frame(){x=(x+2)%180; box.style.transform=\`translateX(\${x}px)\`; document.querySelector("#status").textContent=\`frames: \${++frames}\`; if(frames<120)requestAnimationFrame(frame)} requestAnimationFrame(frame);`,
+`document.body.innerHTML='<div id="box" style="width:30px;height:30px;background:#222"></div><p id="status"></p>'; let x=0,frames=0; const box=document.querySelector("#box"); await new Promise(done=>{function frame(){x=(x+2)%180; box.style.transform=\`translateX(\${x}px)\`; document.querySelector("#status").textContent=\`frames: \${++frames}\`; if(frames<120)requestAnimationFrame(frame); else done()} requestAnimationFrame(frame)});`,
 'render-pipeline',R(2,2,1,1,3),['A callback that itself does too much work can still miss frames.'],['Keep animation work small and prefer transform/opacity where appropriate.'],'dom'),
 
 L('fetch-api','browser','Fetch API',MDN_RUNTIME.fetch,

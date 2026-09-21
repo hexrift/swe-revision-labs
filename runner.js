@@ -126,7 +126,7 @@ export function domSource(code,token){
     <\/script></body></html>`;
 }
 
-export function runDomExample(code,host,{timeout=3500}={}){
+export function runDomExample(code,host,{timeout=6000}={}){
   return new Promise(resolve=>{
     host.innerHTML='';
     const iframe=document.createElement('iframe');

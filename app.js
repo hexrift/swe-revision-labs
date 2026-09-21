@@ -130,7 +130,7 @@ function runnerBlock(lesson){
   }
   return `<section class="runner-card reveal"><div class="runner-head"><div><p class="eyebrow">Run the JavaScript</p><h2>${dom?'Browser main-thread sandbox':'Disposable JavaScript Worker'}</h2></div><span>${dom?'DOM + long-task measurements':'wall time + event-loop delay'}</span></div>
     <textarea class="code-editor" aria-label="JavaScript editor" data-code-editor spellcheck="false">${escapeHtml(code)}</textarea>
-    <div class="runner-actions"><button class="secondary" data-reset-code>Reset</button><button class="primary" data-run-code>${dom?'Run in browser sandbox':'Run JavaScript'}</button></div>
+    <div class="runner-actions"><button class="secondary" data-reset-code>Reset</button>${dom?'<button class="secondary" data-stop-sandbox>Stop sandbox</button>':''}<button class="primary" data-run-code>${dom?'Run in browser sandbox':'Run JavaScript'}</button></div>
     <div class="run-layout"><pre class="run-output" data-run-output role="status" aria-live="polite" aria-atomic="true">Ready.</pre><div class="sandbox-host" data-sandbox-host aria-label="Sandbox output">${dom?'<span>Sandboxed browser output appears here.</span>':'<span>Execution is isolated from the app.</span>'}</div></div>
     <div class="actual-resource-host" data-actual-resource>${renderBrowserMetrics(state.metrics[lesson.id])}</div>
   </section>`;
@@ -232,6 +232,7 @@ root.addEventListener('click',event=>{
   if(target.hasAttribute('data-clear-search')){dispatch({type:'SET_SEARCH',value:''});return}
   if(target.dataset.lesson){dispatch({type:'OPEN_LESSON',id:target.dataset.lesson},{render:false});navigate('lesson/'+target.dataset.lesson);return}
   if(target.hasAttribute('data-run-code')){runCurrent(false);return}
+  if(target.hasAttribute('data-stop-sandbox')){const sandbox=root.querySelector('[data-sandbox-host]');if(sandbox)sandbox.innerHTML='<span>Sandbox stopped. Scheduled work was discarded.</span>';return}
   if(target.hasAttribute('data-run-portable')){runCurrent(true);return}
   if(target.hasAttribute('data-reset-code')){const lesson=currentLesson();dispatch({type:'RESET_CODE',id:lesson.id},{render:false});const editor=root.querySelector('[data-code-editor]');if(editor)editor.value=lesson.code;return}
   if(target.dataset.debugAnswer!==undefined){dispatch({type:'SET_DEBUG_ANSWER',id:currentLesson().id,answer:Number(target.dataset.debugAnswer)});return}
