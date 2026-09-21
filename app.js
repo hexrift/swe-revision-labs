@@ -1,5 +1,6 @@
 import { TOPICS, LESSONS, getLesson, getTopic, lessonsFor, sourceName } from './curriculum.js';
 import { TOPIC_QUIZZES, getTopicQuiz } from './quizzes.js';
+import { formatJavaScript } from './lesson-utils.js';
 import { createDefaultState, normalizeState, reduceState, countCompletedTopics, countVisited } from './state-model.js';
 import { runWorkerCode, runDomExample, nodeProbeFor } from './runner.js';
 import { renderBrowserMetrics, renderNodeMetrics } from './resource-visuals.js';
@@ -38,8 +39,32 @@ function navigate(path){
   const target='#'+path;
   if(location.hash===target) renderApp(); else location.hash=path;
 }
+function scrollToPageTop(){
+  const html=document.documentElement;
+  const previousBehavior=html.style.scrollBehavior;
+  html.style.scrollBehavior='auto';
+  window.scrollTo(0,0);
+  html.style.scrollBehavior=previousBehavior;
+}
 function currentLesson(){return getLesson(state.current)||LESSONS[0]}
-function currentCode(lesson){return state.code[lesson.id]??lesson.code}
+function currentCode(lesson){return formatJavaScript(state.code[lesson.id]??lesson.code)}
+function lineNumbers(code){return code.split('\n').map((_,index)=>`<span>${index+1}</span>`).join('')}
+function editorShell(code,{label='lesson.js',readonly=false,ariaLabel='JavaScript editor'}={}){
+  const formatted=formatJavaScript(code);
+  return `<div class="code-workbench ${readonly?'readonly':''}" data-editor-shell>
+    <div class="editor-titlebar"><div class="editor-window-controls" aria-hidden="true"><i></i><i></i><i></i></div><div class="editor-tab"><b>JS</b><span>${escapeHtml(label)}</span></div><span class="editor-language">JavaScript</span></div>
+    <div class="editor-body"><div class="editor-gutter" data-code-gutter aria-hidden="true">${lineNumbers(formatted)}</div><textarea class="code-editor" aria-label="${escapeHtml(ariaLabel)}" data-code-editor spellcheck="false" autocomplete="off" autocapitalize="off" ${readonly?'readonly':''}>${escapeHtml(formatted)}</textarea></div>
+    <div class="editor-statusbar"><span data-editor-line-status>${formatted.split('\n').length} ${formatted.split('\n').length===1?'line':'lines'}</span><span>JavaScript · UTF-8 · Spaces: 2</span></div>
+  </div>`;
+}
+function lessonBrief(lesson){
+  const tip=lesson.tips?.[0]||'Make the important behaviour explicit so it is easier to review and maintain.';
+  const debug=lesson.debug;
+  const label=debug?'What this lab is diagnosing':'Why the right-hand example is better';
+  const tag=debug?'diagnose first':'read this first';
+  const reason=debug?`<strong>Start here:</strong> Identify the failure mode before revealing the diagnosis. ${escapeHtml(debug.question)}`:`<strong>What improves:</strong> The clearer version makes the key behaviour visible instead of relying on an implicit rule or hiding the result. ${escapeHtml(tip)}`;
+  return `<div class="lesson-brief"><div class="lesson-brief-head"><span class="lesson-brief-label">${label}</span><span class="lesson-brief-tag">${tag}</span></div><p class="lesson-brief-summary">${escapeHtml(lesson.summary)}</p><p class="lesson-brief-reason">${reason}</p></div>`;
+}
 function firstUnvisited(){return LESSONS.find(x=>!state.visited[x.id])||LESSONS[0]}
 function resumeLesson(){return getLesson(state.current)||firstUnvisited()}
 function percent(a,b){return b?Math.round(a/b*100):0}
@@ -106,7 +131,7 @@ function indexView(){
   </main>`);
 }
 
-function compareCard(kind,code,source){return `<article class="compare-card ${kind}"><header><span>${kind==='poor'?'Poor / risky':'Better / clearer'}</span><a href="${source}" target="_blank" rel="noreferrer">reference ↗</a></header><pre><code>${escapeHtml(code)}</code></pre></article>`}
+function compareCard(kind,code,source){return `<article class="compare-card ${kind}"><header><span>${kind==='poor'?'Poor / risky':'Better / clearer'}</span><a href="${source}" target="_blank" rel="noreferrer">reference ↗</a></header><pre><code>${escapeHtml(formatJavaScript(code))}</code></pre></article>`}
 function expressionTracePanel(kind,steps){
   return `<article class="trace-panel ${kind}"><header><div><p class="eyebrow">${kind==='poor'?'Risky trace':'Clearer trace'}</p><strong>${kind==='poor'?'Value is evaluated, then lost':'Value is updated, then emitted'}</strong></div><span>${kind==='poor'?'no output':'output: 1'}</span></header><ol>${steps.map((step,index)=>`<li data-trace-side="${kind}" data-trace-step="${index}"><code>${escapeHtml(step.code)}</code><span>${escapeHtml(step.label)}</span><b>${escapeHtml(step.value)}</b></li>`).join('')}</ol><div class="trace-result"><span>Program output</span><strong data-trace-output="${kind}">—</strong></div></article>`;
 }
@@ -145,6 +170,16 @@ function renderExpressionTrace(host,step){
   host.querySelector('[data-expression-trace-action="previous"]').disabled=current===0;
   host.querySelector('[data-expression-trace-action="next"]').disabled=current===max-1;
 }
+function syncCodeEditor(){
+  const editor=root.querySelector('[data-code-editor]');
+  const gutter=root.querySelector('[data-code-gutter]');
+  if(!editor||!gutter)return;
+  const lines=editor.value.split('\n').length;
+  gutter.innerHTML=lineNumbers(editor.value);
+  gutter.scrollTop=editor.scrollTop;
+  const status=root.querySelector('[data-editor-line-status]');
+  if(status)status.textContent=`${lines} ${lines===1?'line':'lines'}`;
+}
 function quizView(topicId){
   const topic=getTopic(topicId);
   const quiz=getTopicQuiz(topicId);
@@ -167,10 +202,10 @@ function debugBlock(lesson){
   const selected=progress.answer;
   const revealed=progress.revealed;
   return `<section class="debug-card reveal delay-2"><div class="debug-head"><div><p class="eyebrow">Advanced debugging lab</p><h2>${escapeHtml(lesson.debug.symptom)}</h2></div><span>${revealed?'analysis revealed':'diagnose first'}</span></div>
-    <pre class="debug-code"><code>${escapeHtml(lesson.compare.bad)}</code></pre>
+    <pre class="debug-code"><code>${escapeHtml(formatJavaScript(lesson.compare.bad))}</code></pre>
     <div class="debug-question"><p>${escapeHtml(lesson.debug.question)}</p><div class="debug-options">${lesson.debug.options.map((option,index)=>`<button data-debug-answer="${index}" class="${selected===index?'selected':''} ${revealed?(index===lesson.debug.answer?'correct':selected===index?'wrong':''):''}"><span>${String.fromCharCode(65+index)}</span>${escapeHtml(option)}</button>`).join('')}</div></div>
     <div class="debug-actions"><button class="secondary" data-debug-reveal ${selected===null?'disabled':''}>${revealed?'Analysis revealed':'Reveal diagnosis'}</button></div>
-    ${revealed?`<div class="debug-analysis"><article><p class="eyebrow">Next thing to inspect</p><p>${escapeHtml(lesson.debug.next)}</p></article><article><p class="eyebrow">Root cause</p><p>${escapeHtml(lesson.debug.root)}</p></article><article><p class="eyebrow">Fix</p><pre><code>${escapeHtml(lesson.debug.fix)}</code></pre></article></div>`:''}
+    ${revealed?`<div class="debug-analysis"><article><p class="eyebrow">Next thing to inspect</p><p>${escapeHtml(lesson.debug.next)}</p></article><article><p class="eyebrow">Root cause</p><p>${escapeHtml(lesson.debug.root)}</p></article><article><p class="eyebrow">Fix</p><pre><code>${escapeHtml(formatJavaScript(lesson.debug.fix))}</code></pre></article></div>`:''}
   </section>`;
 }
 
@@ -183,14 +218,14 @@ function runnerBlock(lesson){
     const imported=state.nodeMetrics[lesson.id];
     return `<section class="runner-card reveal"><div class="runner-head"><div><p class="eyebrow">Run on your real Node process</p><h2>Actual Node resource probe</h2></div><span>official process/perf metrics</span></div>
       <p class="runner-note">GitHub Pages cannot execute Node or read your OS process counters. Save this as <code>resource-probe.mjs</code>, run <code>node resource-probe.mjs</code>, then paste the final JSON object below.</p>
-      <textarea class="code-editor node-probe" aria-label="Generated Node.js resource probe" readonly spellcheck="false">${escapeHtml(probe)}</textarea>
+      ${editorShell(probe,{label:'resource-probe.mjs',readonly:true,ariaLabel:'Generated Node.js resource probe'})}
       <label class="node-import"><span>Paste Node probe JSON</span><textarea aria-label="Node probe JSON" data-node-metrics-input spellcheck="false" placeholder='{"node":"v26.x", "memory":{...}}'>${imported?escapeHtml(JSON.stringify(imported,null,2)):''}</textarea></label>
       <div class="runner-actions"><button class="primary" data-import-node-metrics>Visualize measured Node resources</button></div>
       <div class="actual-resource-host" data-actual-resource>${renderNodeMetrics(imported)}</div>
     </section>`;
   }
   return `<section class="runner-card reveal"><div class="runner-head"><div><p class="eyebrow">Run the JavaScript</p><h2>${dom?'Browser main-thread sandbox':'Disposable JavaScript Worker'}</h2></div><span>${dom?'DOM + long-task measurements':'wall time + event-loop delay'}</span></div>
-    <textarea class="code-editor" aria-label="JavaScript editor" data-code-editor spellcheck="false">${escapeHtml(code)}</textarea>
+    ${editorShell(code,{label:`${lesson.id}.js`,ariaLabel:'JavaScript editor'})}
     <div class="runner-actions"><button class="secondary" data-reset-code>Reset</button>${dom?'<button class="secondary" data-stop-sandbox>Stop sandbox</button>':''}<button class="primary" data-run-code>${dom?'Run in browser sandbox':'Run JavaScript'}</button></div>
     <div class="run-layout"><pre class="run-output" data-run-output role="status" aria-live="polite" aria-atomic="true">Ready.</pre><div class="sandbox-host" data-sandbox-host aria-label="Sandbox output">${dom?'<span>Sandboxed browser output appears here.</span>':'<span>Execution is isolated from the app.</span>'}</div></div>
     <div class="actual-resource-host" data-actual-resource>${renderBrowserMetrics(state.metrics[lesson.id])}</div>
@@ -202,7 +237,7 @@ function lessonView(lesson){
   const topicLessons=lessonsFor(lesson.topic);
   const topicEnd=topicLessons.at(-1)?.id===lesson.id;
   return chrome(`<main class="page lesson-page">
-    <section class="lesson-head reveal"><button class="back" data-nav="index">← Index</button><span class="position">${LESSONS.indexOf(lesson)+1} / ${LESSONS.length}</span><p class="eyebrow">${escapeHtml(topic?.title||'JavaScript')}</p><h1>${escapeHtml(lesson.title)}</h1><p class="lead">${escapeHtml(lesson.summary)}</p><a class="source-pill" href="${lesson.source}" target="_blank" rel="noreferrer"><b>${escapeHtml(sourceName(lesson.source))}</b><span>${escapeHtml(sourceDomain(lesson.source))}</span><em>↗</em></a></section>
+    <section class="lesson-head reveal"><button class="back" data-nav="index">← Index</button><span class="position">${LESSONS.indexOf(lesson)+1} / ${LESSONS.length}</span><p class="eyebrow">${escapeHtml(topic?.title||'JavaScript')}</p><h1>${escapeHtml(lesson.title)}</h1>${lessonBrief(lesson)}<a class="source-pill" href="${lesson.source}" target="_blank" rel="noreferrer"><b>${escapeHtml(sourceName(lesson.source))}</b><span>${escapeHtml(sourceDomain(lesson.source))}</span><em>↗</em></a></section>
     ${lesson.debug?debugBlock(lesson):`<section class="compare-grid reveal delay-2">${compareCard('poor',lesson.compare.bad,lesson.source)}<div class="compare-arrow">→</div>${compareCard('better',lesson.compare.good,lesson.source)}</section>`}
     ${lesson.id==='syntax-expressions'?expressionVisual():''}
     ${runnerBlock(lesson)}
@@ -225,6 +260,7 @@ function renderApp(){
       root.innerHTML=lessonView(lesson);
       const trace=root.querySelector('[data-expression-trace]');
       if(trace)renderExpressionTrace(trace,0);
+      syncCodeEditor();
     } else if(r.view==='index') root.innerHTML=indexView();
     else if(r.view==='quiz'){
       if(!getTopic(r.id)||!getTopicQuiz(r.id)){navigate('index');return}
@@ -320,7 +356,7 @@ root.addEventListener('click',event=>{
   if(target.hasAttribute('data-run-code')){runCurrent(false);return}
   if(target.hasAttribute('data-stop-sandbox')){stopSandbox();return}
   if(target.hasAttribute('data-run-portable')){runCurrent(true);return}
-  if(target.hasAttribute('data-reset-code')){const lesson=currentLesson();dispatch({type:'RESET_CODE',id:lesson.id},{render:false});const editor=root.querySelector('[data-code-editor]');if(editor)editor.value=lesson.code;return}
+  if(target.hasAttribute('data-reset-code')){const lesson=currentLesson();dispatch({type:'RESET_CODE',id:lesson.id},{render:false});const editor=root.querySelector('[data-code-editor]');if(editor){editor.value=formatJavaScript(lesson.code);syncCodeEditor()}return}
   if(target.dataset.debugAnswer!==undefined){dispatch({type:'SET_DEBUG_ANSWER',id:currentLesson().id,answer:Number(target.dataset.debugAnswer)});return}
   if(target.hasAttribute('data-debug-reveal')){dispatch({type:'REVEAL_DEBUG',id:currentLesson().id});return}
   if(target.hasAttribute('data-import-node-metrics')){const input=root.querySelector('[data-node-metrics-input]');const host=root.querySelector('[data-actual-resource]');try{const parsed=JSON.parse(input?.value||'');dispatch({type:'SET_NODE_METRICS',id:currentLesson().id,value:parsed},{render:false});if(host)host.innerHTML=renderNodeMetrics(parsed)}catch(error){if(host)host.innerHTML=`<div class="actual-empty error"><strong>Invalid JSON.</strong><p>${escapeHtml(error.message)}</p></div>`}return}
@@ -328,11 +364,17 @@ root.addEventListener('click',event=>{
 
 root.addEventListener('input',event=>{
   const input=event.target;
-  if(input.matches('[data-code-editor]')){dispatch({type:'SET_CODE',id:currentLesson().id,value:input.value},{render:false});return}
+  if(input.matches('[data-code-editor]')){syncCodeEditor();dispatch({type:'SET_CODE',id:currentLesson().id,value:input.value},{render:false});return}
   if(input.matches('[data-search]')){dispatch({type:'SET_SEARCH',value:input.value},{render:false});updateIndexRows();return}
 });
+root.addEventListener('scroll',event=>{
+  const editor=event.target;
+  if(!editor.matches?.('[data-code-editor]'))return;
+  const gutter=root.querySelector('[data-code-gutter]');
+  if(gutter)gutter.scrollTop=editor.scrollTop;
+},true);
 root.addEventListener('click',event=>{if(event.target.matches('[data-drawer-backdrop]'))closeDrawer()});
-window.addEventListener('hashchange',renderApp);
+window.addEventListener('hashchange',()=>{renderApp();scrollToPageTop()});
 window.addEventListener('keydown',event=>{if(event.key==='Escape')closeDrawer()});
 
 async function removeLegacyWorkers(){

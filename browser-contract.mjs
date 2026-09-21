@@ -108,6 +108,45 @@ try{
 
   // UI integration: the real Stop sandbox button must cancel an active run
   // through app.js's own wiring, not just the runner API.
+  await page.goto(`${base}/index.html#lesson/lexical-scope`);
+  const editorPresentation=await page.evaluate(()=>({
+    brief:document.querySelector('.lesson-brief')?.textContent||'',
+    compareLines:[...document.querySelectorAll('.compare-card code')].map(node=>node.textContent.split('\n').length),
+    editorLines:document.querySelector('[data-code-editor]')?.value.split('\n').length||0,
+    gutterLines:document.querySelectorAll('[data-code-gutter] span').length,
+    workbench:!!document.querySelector('.code-workbench')
+  }));
+  assert.match(editorPresentation.brief,/Why the right-hand example is better/,'the lesson must explain the comparison before the code');
+  assert.ok(editorPresentation.compareLines.some(lines=>lines>1),'comparison examples must render as readable multi-line code');
+  assert.ok(editorPresentation.editorLines>1,'the runner example must render as readable multi-line code');
+  assert.equal(editorPresentation.gutterLines,editorPresentation.editorLines,'the editor gutter must track code lines');
+  assert.equal(editorPresentation.workbench,true,'the runner must use the editor workbench');
+
+  const gutterScroll=await page.evaluate(()=>{
+    const editor=document.querySelector('[data-code-editor]');
+    const gutter=document.querySelector('[data-code-gutter]');
+    editor.closest('.editor-body').style.height='260px';
+    editor.value=Array.from({length:80},(_,index)=>`const line${index}= ${index};`).join('\n');
+    editor.dispatchEvent(new Event('input',{bubbles:true}));
+    editor.scrollTop=200;
+    editor.dispatchEvent(new Event('scroll'));
+    return {editor:editor.scrollTop,gutter:gutter.scrollTop};
+  });
+  assert.ok(gutterScroll.editor>0,'the editor scroll-sync regression setup must overflow');
+  assert.equal(gutterScroll.gutter,gutterScroll.editor,'the line-number gutter must follow editor scrolling');
+
+  await page.goto(`${base}/index.html#lesson/debug-response-json`);
+  const debugBrief=await page.locator('.lesson-brief').textContent();
+  assert.match(debugBrief,/What this lab is diagnosing/,'debug lessons need a diagnostic brief');
+  assert.doesNotMatch(debugBrief,/Why the right-hand example is better/,'debug lessons must not claim to have a right-hand comparison');
+
+  await page.goto(`${base}/index.html#lesson/lexical-scope`);
+  await page.evaluate(()=>{document.documentElement.style.scrollBehavior='auto';window.scrollTo(0,document.body.scrollHeight)});
+  assert.ok(await page.evaluate(()=>window.scrollY>0),'the navigation regression setup must start below the top');
+  await page.click('[data-lesson]');
+  await page.waitForFunction(()=>location.hash==='#lesson/hoisting-tdz');
+  assert.equal(await page.evaluate(()=>window.scrollY),0,'Next lesson navigation must return the learner to the top');
+
   await page.goto(`${base}/index.html#lesson/request-animation-frame`);
   await page.waitForSelector('[data-stop-sandbox]');
   await page.evaluate(()=>{document.querySelector('[data-code-editor]').value='await new Promise(()=>{});';});
