@@ -30,4 +30,6 @@ assert.ok(LESSONS.some(x=>x.id==='node-event-loop'));
 assert.ok(LESSONS.some(x=>x.id==='node-memory-usage'));
 assert.ok(LESSONS.some(x=>x.id==='node-workers'));
 assert.ok(LESSONS.filter(x=>x.topic==='debugging').length>=10,'expected advanced debugging section');
+const rafLesson=LESSONS.find(x=>x.id==='request-animation-frame');
+assert.match(rafLesson.code,/await new Promise/,'rAF example must await its final frame so the runner measures the full animation');
 console.log(`Curriculum contracts passed: ${TOPICS.length} topics, ${LESSONS.length} lessons.`);

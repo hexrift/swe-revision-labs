@@ -4,14 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -28,6 +27,12 @@ jobs:
           done
       - name: Run curriculum/state/application contracts
         run: npm test
+      - name: Install browser test toolchain
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run browser lifecycle contracts
+        run: npm run test:browser
 
   deploy:
     if: github.event_name != 'pull_request'

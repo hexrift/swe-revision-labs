@@ -75,16 +75,13 @@ export function runWorkerCode(code,{timeout=WORKER_TIMEOUT}={}){
   });
 }
 
-function safeInlineScript(code){
-  return String(code)
-    .replace(/<\/script/gi,'<\\/script')
-    .replace(/\u2028/g,'\\u2028')
-    .replace(/\u2029/g,'\\u2029');
+function safeScript(code){
+  return JSON.stringify(String(code)).replace(/<\/script/gi,'<\\/script');
 }
 
 export function domSource(code,token){
-  const source=safeInlineScript(code);
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'none'; img-src data:; script-src 'unsafe-inline'; style-src 'unsafe-inline'"><style>body{font:14px/1.5 system-ui;padding:14px;margin:0;color:#171717;background:#fff}button,input{font:inherit}pre{white-space:pre-wrap}</style></head><body><div id="root"></div><script>
+  const source=safeScript(code);
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'none'; img-src data:; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'"><style>body{font:14px/1.5 system-ui;padding:14px;margin:0;color:#171717;background:#fff}button,input{font:inherit}pre{white-space:pre-wrap}</style></head><body><div id="root"></div><script>
       const token=${JSON.stringify(token)};
       const lines=[];
       const stringify=v=>{try{return typeof v==='string'?v:JSON.stringify(v)}catch{return String(v)}};
@@ -92,40 +89,6 @@ export function domSource(code,token){
       const heap=()=>performance&&performance.memory?{usedJSHeapSize:Number(performance.memory.usedJSHeapSize)||0,totalJSHeapSize:Number(performance.memory.totalJSHeapSize)||0,jsHeapSizeLimit:Number(performance.memory.jsHeapSizeLimit)||0}:null;
       const send=payload=>parent.postMessage({__sweSandbox:true,token,...payload},'*');
       const nativeSetTimeout=window.setTimeout.bind(window);
-      const nativeClearTimeout=window.clearTimeout.bind(window);
-      const nativeSetInterval=window.setInterval.bind(window);
-      const nativeClearInterval=window.clearInterval.bind(window);
-      const nativeRequestAnimationFrame=window.requestAnimationFrame?.bind(window);
-      const nativeCancelAnimationFrame=window.cancelAnimationFrame?.bind(window);
-      const timeouts=new Set(), intervals=new Set(), frames=new Set();
-      window.setTimeout=(handler,delay,...args)=>{
-        let id;
-        id=nativeSetTimeout(()=>{timeouts.delete(id);handler(...args)},delay);
-        timeouts.add(id);
-        return id;
-      };
-      window.clearTimeout=id=>{timeouts.delete(id);nativeClearTimeout(id)};
-      window.setInterval=(handler,delay,...args)=>{
-        const id=nativeSetInterval(handler,delay,...args);
-        intervals.add(id);
-        return id;
-      };
-      window.clearInterval=id=>{intervals.delete(id);nativeClearInterval(id)};
-      if(nativeRequestAnimationFrame){
-        window.requestAnimationFrame=handler=>{
-          let id;
-          id=nativeRequestAnimationFrame(timestamp=>{frames.delete(id);handler(timestamp)});
-          frames.add(id);
-          return id;
-        };
-        window.cancelAnimationFrame=id=>{frames.delete(id);nativeCancelAnimationFrame?.(id)};
-      }
-      const clearUserScheduling=()=>{
-        for(const id of timeouts) nativeClearTimeout(id);
-        for(const id of intervals) nativeClearInterval(id);
-        for(const id of frames) nativeCancelAnimationFrame?.(id);
-        timeouts.clear(); intervals.clear(); frames.clear();
-      };
       (async()=>{
         const nodeBefore=document.getElementsByTagName('*').length;
         let mutations=0;
@@ -142,13 +105,11 @@ export function domSource(code,token){
         const delayPromise=new Promise(r=>nativeSetTimeout(()=>r(performance.now()-scheduledAt),0));
         const start=performance.now();
         try{
-          await (async()=>{
-${source}
-          })();
+          const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
+          await new AsyncFunction(${source})();
           const duration=performance.now()-start;
           const eventLoopDelay=await delayPromise;
           await new Promise(r=>nativeSetTimeout(r,0));
-          clearUserScheduling();
           observer.disconnect(); longObserver?.disconnect();
           const memoryAfter=heap();
           const nodeAfter=document.getElementsByTagName('*').length;
@@ -156,7 +117,6 @@ ${source}
         }catch(error){
           const duration=performance.now()-start;
           const eventLoopDelay=await delayPromise;
-          clearUserScheduling();
           observer.disconnect(); longObserver?.disconnect();
           const memoryAfter=heap();
           const nodeAfter=document.getElementsByTagName('*').length;
@@ -166,7 +126,7 @@ ${source}
     <\/script></body></html>`;
 }
 
-export function runDomExample(code,host,{timeout=3500}={}){
+export function runDomExample(code,host,{timeout=6000,signal}={}){
   return new Promise(resolve=>{
     host.innerHTML='';
     const iframe=document.createElement('iframe');
@@ -177,21 +137,27 @@ export function runDomExample(code,host,{timeout=3500}={}){
     iframe.srcdoc=domSource(code,token);
     host.append(iframe);
     let settled=false;
-    const cleanup=()=>window.removeEventListener('message',onMessage);
+    const cleanup=()=>{
+      window.removeEventListener('message',onMessage);
+      signal?.removeEventListener('abort',onAbort);
+    };
     const finish=result=>{
       if(settled)return;
       settled=true;
       clearTimeout(timer);
       cleanup();
-      if(result.timeout) iframe.remove();
+      if(result.timeout||result.stopped) iframe.remove();
       resolve(result);
     };
     const onMessage=event=>{
       if(event.source!==iframe.contentWindow||!event.data?.__sweSandbox||event.data.token!==token) return;
       finish(event.data);
     };
+    const onAbort=()=>finish({ok:false,lines:[],error:'Run stopped. The sandbox and all scheduled work were discarded.',stopped:true,duration:0,realm:'browser-main-thread'});
     window.addEventListener('message',onMessage);
+    signal?.addEventListener('abort',onAbort);
     const timer=setTimeout(()=>finish({ok:false,lines:[],error:'Browser example did not finish in time.',timeout:true,duration:timeout,realm:'browser-main-thread'}),timeout);
+    if(signal?.aborted) onAbort();
   });
 }
 

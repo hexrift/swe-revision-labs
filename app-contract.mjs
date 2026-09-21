@@ -19,6 +19,7 @@ assert.match(source,/registration\.scope===appScope/);
 assert.match(source,/aria-label="JavaScript editor"/);
 assert.match(source,/role="progressbar"/);
 assert.match(source,/aria-live="polite"/);
+assert.match(source,/data-stop-sandbox/);
 assert.doesNotMatch(source,/python/i);
 assert.doesNotMatch(source,/typescript/i);
 assert.doesNotMatch(source,/conceptual model · not a profiler/);
