@@ -140,6 +140,7 @@ try{
   assert.match(debugBrief,/What this lab is diagnosing/,'debug lessons need a diagnostic brief');
   assert.doesNotMatch(debugBrief,/Why the right-hand example is better/,'debug lessons must not claim to have a right-hand comparison');
 
+  await page.goto(`${base}/index.html#lesson/lexical-scope`);
   await page.evaluate(()=>{document.documentElement.style.scrollBehavior='auto';window.scrollTo(0,document.body.scrollHeight)});
   assert.ok(await page.evaluate(()=>window.scrollY>0),'the navigation regression setup must start below the top');
   await page.click('[data-lesson]');
