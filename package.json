@@ -4,5 +4,8 @@
   "scripts": {
     "test": "node curriculum-contract.mjs && node state-contract.mjs && node app-contract.mjs && node runner-contract.mjs",
     "test:browser": "node browser-contract.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
   }
 }

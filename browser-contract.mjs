@@ -105,6 +105,45 @@ try{
   assert.equal(results.stop.iframesAfterStop,0,'stop must remove the sandbox iframe');
   assert.ok(results.stop.probesBeforeStop>0,'the detached interval must be observably alive before stop');
   assert.equal(results.stop.probesAfterStop,0,'detached timers must not survive a stop');
+
+  // UI integration: the real Stop sandbox button must cancel an active run
+  // through app.js's own wiring, not just the runner API.
+  await page.goto(`${base}/index.html#lesson/request-animation-frame`);
+  await page.waitForSelector('[data-stop-sandbox]');
+  await page.evaluate(()=>{document.querySelector('[data-code-editor]').value='await new Promise(()=>{});';});
+  await page.click('[data-run-code]');
+  await page.waitForFunction(()=>document.querySelector('[data-run-output]')?.textContent==='Running…');
+  await page.waitForSelector('[data-sandbox-host] iframe');
+  await page.click('[data-stop-sandbox]');
+  await page.waitForFunction(()=>document.querySelector('[data-run-output]')?.textContent.includes('stopped'),null,{timeout:1500});
+  const afterActiveStop=await page.evaluate(()=>({
+    output:document.querySelector('[data-run-output]').textContent,
+    runDisabled:document.querySelector('[data-run-code]').disabled,
+    iframes:document.querySelectorAll('[data-sandbox-host] iframe').length
+  }));
+  assert.match(afterActiveStop.output,/stopped/,'clicking Stop must switch the output to the stopped state immediately');
+  assert.equal(afterActiveStop.runDisabled,false,'the Run button must be re-enabled immediately after Stop');
+  assert.equal(afterActiveStop.iframes,0,'clicking Stop must remove the sandbox iframe');
+
+  // Stopping after a completed run is a sandbox-lifecycle action: the run's
+  // result and measurements stay, only the live sandbox is torn down.
+  await page.evaluate(()=>{document.querySelector('[data-code-editor]').value='console.log("done");';});
+  await page.click('[data-run-code]');
+  await page.waitForFunction(()=>document.querySelector('[data-run-output]')?.textContent.startsWith('✓'));
+  await page.waitForSelector('[data-sandbox-host] iframe');
+  const metricsBefore=await page.evaluate(()=>document.querySelector('[data-actual-resource]').innerHTML);
+  await page.click('[data-stop-sandbox]');
+  const afterCompletedStop=await page.evaluate(()=>({
+    output:document.querySelector('[data-run-output]').textContent,
+    iframes:document.querySelectorAll('[data-sandbox-host] iframe').length,
+    sandboxNote:document.querySelector('[data-sandbox-host]').textContent,
+    metrics:document.querySelector('[data-actual-resource]').innerHTML
+  }));
+  assert.ok(afterCompletedStop.output.startsWith('✓'),'stopping after completion must preserve the completed run status');
+  assert.equal(afterCompletedStop.iframes,0,'stopping after completion must remove the sandbox iframe');
+  assert.match(afterCompletedStop.sandboxNote,/Sandbox stopped/,'the sandbox host must state its stopped lifecycle');
+  assert.match(afterCompletedStop.sandboxNote,/still stand/,'the stopped note must say the completed measurements remain valid');
+  assert.equal(afterCompletedStop.metrics,metricsBefore,'the completed run’s measurements must remain displayed');
   console.log('Browser lifecycle contracts passed.');
 }finally{
   await browser.close();

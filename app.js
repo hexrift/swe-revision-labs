@@ -196,9 +196,9 @@ function stopSandbox(){
   if(domRunController){domRunController.abort();return}
   const sandbox=root.querySelector('[data-sandbox-host]');
   if(!sandbox||!sandbox.querySelector('iframe'))return;
-  sandbox.innerHTML=SANDBOX_STOPPED_HTML;
-  const output=root.querySelector('[data-run-output]');
-  if(output){output.textContent='◼ stopped\nThe finished run’s sandbox was torn down; any work it still had scheduled was discarded.';output.classList.remove('failed')}
+  // Stopping after a completed run is a sandbox-lifecycle action: the run's
+  // result and measurements still stand, only the live sandbox is torn down.
+  sandbox.innerHTML='<span>Sandbox stopped; any work it still had scheduled was discarded. The completed run’s output and measurements still stand.</span>';
 }
 
 async function runCurrent(portable=false){
