@@ -88,6 +88,7 @@ export function domSource(code,token){
       for(const level of ['log','info','warn','error']) console[level]=(...args)=>lines.push(args.map(stringify).join(' '));
       const heap=()=>performance&&performance.memory?{usedJSHeapSize:Number(performance.memory.usedJSHeapSize)||0,totalJSHeapSize:Number(performance.memory.totalJSHeapSize)||0,jsHeapSizeLimit:Number(performance.memory.jsHeapSizeLimit)||0}:null;
       const send=payload=>parent.postMessage({__sweSandbox:true,token,...payload},'*');
+      const nativeSetTimeout=window.setTimeout.bind(window);
       (async()=>{
         const nodeBefore=document.getElementsByTagName('*').length;
         let mutations=0;
@@ -101,14 +102,14 @@ export function domSource(code,token){
         }
         const memoryBefore=heap();
         const scheduledAt=performance.now();
-        const delayPromise=new Promise(r=>setTimeout(()=>r(performance.now()-scheduledAt),0));
+        const delayPromise=new Promise(r=>nativeSetTimeout(()=>r(performance.now()-scheduledAt),0));
         const start=performance.now();
         try{
           const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
           await new AsyncFunction(${source})();
           const duration=performance.now()-start;
           const eventLoopDelay=await delayPromise;
-          await new Promise(r=>setTimeout(r,0));
+          await new Promise(r=>nativeSetTimeout(r,0));
           observer.disconnect(); longObserver?.disconnect();
           const memoryAfter=heap();
           const nodeAfter=document.getElementsByTagName('*').length;
