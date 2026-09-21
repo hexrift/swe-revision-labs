@@ -4,10 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f3f3ef">
+  <meta name="color-scheme" content="light dark">
   <meta name="description" content="SWE Revision Labs — JavaScript from primitives and closures to browser and Node.js runtime resources, sourced from MDN and Node.js documentation.">
   <title>SWE Revision Labs · JavaScript</title>
   <link rel="stylesheet" href="./styles.css">
   <link rel="manifest" href="./manifest.webmanifest">
+  <script>
+    (()=>{
+      try{
+        const preference=localStorage.getItem('swe-revision-labs:theme');
+        const dark=preference==='dark'||(preference!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme=dark?'dark':'light';
+        document.querySelector('meta[name="theme-color"]').content=dark?'#141517':'#f3f3ef';
+      }catch{}
+    })();
+  </script>
 </head>
 <body>
   <div id="app"></div>

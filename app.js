@@ -7,6 +7,7 @@ import { renderBrowserMetrics, renderNodeMetrics } from './resource-visuals.js';
 
 const root=document.querySelector('#app');
 const STORE='swe-revision-labs:javascript-v3';
+const THEME_STORE='swe-revision-labs:theme';
 const CTX={lessons:LESSONS,topics:TOPICS,quizzes:TOPIC_QUIZZES};
 let state=loadState();
 let running=false;
@@ -71,15 +72,28 @@ function percent(a,b){return b?Math.round(a/b*100):0}
 function topicProgress(topic){const items=lessonsFor(topic.id);const visited=countVisited(state,items);const quizPassed=!!state.quiz[topic.id]?.passed;return {visited,total:items.length,percent:percent(visited,items.length),quizPassed}}
 function nextLesson(lesson){const i=LESSONS.findIndex(x=>x.id===lesson.id);return LESSONS[i+1]||null}
 function sourceDomain(url){try{return new URL(url).hostname.replace(/^www\./,'')}catch{return''}}
+function currentTheme(){return document.documentElement.dataset.theme==='dark'?'dark':'light'}
+function setTheme(theme){
+  const next=theme==='dark'?'dark':'light';
+  document.documentElement.dataset.theme=next;
+  try{localStorage.setItem(THEME_STORE,next)}catch(error){console.warn('Theme preference failed',error)}
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content',next==='dark'?'#141517':'#f3f3ef');
+}
+function themeToggleMarkup(){
+  const dark=currentTheme()==='dark';
+  return `<span class="theme-toggle-icon" aria-hidden="true">${dark?'☼':'☾'}</span><span><b>${dark?'Light mode':'Dark mode'}</b><small>Make the interface easier on the eyes</small></span><em>${dark?'On':'Off'}</em>`;
+}
 
 function icon(){return `<span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>`}
 function drawer(){
+  const dark=currentTheme()==='dark';
   return `<div class="drawer-backdrop" data-drawer-backdrop></div><aside id="site-drawer" class="drawer" data-drawer role="dialog" aria-modal="true" aria-label="JavaScript index" aria-hidden="true">
     <div class="drawer-head"><div><p class="eyebrow">SWE Revision Labs</p><h2>JavaScript index</h2></div><button data-drawer-close class="icon-button" aria-label="Close menu">×</button></div>
     <nav class="drawer-nav">
       <button data-nav="home"><span>01</span><b>Learn</b><small>Continue your current concept</small><em>→</em></button>
       <button data-nav="index"><span>02</span><b>Full index</b><small>${LESSONS.length} lessons · searchable</small><em>→</em></button>
     </nav>
+    <button class="theme-toggle" data-theme-toggle aria-pressed="${dark}" aria-label="Switch to ${dark?'light':'dark'} mode">${themeToggleMarkup()}</button>
     <div class="drawer-topics"><p class="eyebrow">Topics</p>${TOPICS.map(topic=>`<button data-topic="${topic.id}">${escapeHtml(topic.title)}<span>${lessonsFor(topic.id).length}</span></button>`).join('')}</div>
   </aside>`;
 }
@@ -340,6 +354,14 @@ root.addEventListener('click',event=>{
   if(!target)return;
   if(target.matches('[data-drawer-open]')){openDrawer();return}
   if(target.matches('[data-drawer-close],[data-drawer-backdrop]')){closeDrawer();return}
+  if(target.matches('[data-theme-toggle]')){
+    setTheme(currentTheme()==='dark'?'light':'dark');
+    const dark=currentTheme()==='dark';
+    target.setAttribute('aria-pressed',String(dark));
+    target.setAttribute('aria-label',`Switch to ${dark?'light':'dark'} mode`);
+    target.innerHTML=themeToggleMarkup();
+    return;
+  }
   if(target.dataset.nav){event.preventDefault();navigate(target.dataset.nav);return}
   if(target.hasAttribute('data-topic')){
     const id=target.dataset.topic||'';
