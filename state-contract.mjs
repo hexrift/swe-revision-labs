@@ -6,7 +6,7 @@ const topics=[{id:'one'},{id:'two'}];
 const quizzes=[{topic:'one',questions:[{options:['a','b'],answer:1},{options:['a','b'],answer:0}]}];
 let state=normalizeState({
   current:'b',topic:'removed',comfortable:{a:true,removed:true},code:{a:'x',removed:'y'},
-  visited:{a:true,removed:true},
+  visited:{},
   mastery:{a:[true,false,true,false],removed:[true]},search:'abc',
   metrics:{a:{duration:12},removed:{duration:99}},nodeMetrics:{b:{memory:{rss:100}}},debug:{a:{answer:2,revealed:true}},
   quiz:{one:{answers:[1,0],submitted:true,passed:true},removed:{answers:[99],submitted:true,passed:true}}
@@ -33,9 +33,13 @@ state=reduceState(state,{type:'SET_METRICS',id:'a',value:{duration:5}},{lessons,
 state=reduceState(state,{type:'SET_NODE_METRICS',id:'a',value:{memory:{rss:200}}},{lessons,topics,quizzes});assert.equal(state.nodeMetrics.a.memory.rss,200);
 state=reduceState(state,{type:'SET_DEBUG_ANSWER',id:'a',answer:1},{lessons,topics,quizzes});assert.equal(state.debug.a.answer,1);assert.equal(state.debug.a.revealed,false);
 state=reduceState(state,{type:'REVEAL_DEBUG',id:'a'},{lessons,topics,quizzes});assert.equal(state.debug.a.revealed,true);
+state=reduceState(state,{type:'RETAKE_QUIZ',topic:'one'},{lessons,topics,quizzes});
 state=reduceState(state,{type:'SET_QUIZ_ANSWER',topic:'one',question:0,answer:0},{lessons,topics,quizzes});assert.equal(state.quiz.one.answers[0],0);assert.equal(state.quiz.one.submitted,false);
+state=reduceState(state,{type:'SET_QUIZ_ANSWER',topic:'one',question:1,answer:0},{lessons,topics,quizzes});
 state=reduceState(state,{type:'SET_QUIZ_ANSWER',topic:'one',question:0,answer:1},{lessons,topics,quizzes});
 state=reduceState(state,{type:'SUBMIT_QUIZ',topic:'one'},{lessons,topics,quizzes});assert.equal(state.quiz.one.passed,true);
+assert.equal(reduceState(state,{type:'SET_QUIZ_ANSWER',topic:'one',question:0,answer:0},{lessons,topics,quizzes}),state);
+state=reduceState(state,{type:'RETAKE_QUIZ',topic:'one'},{lessons,topics,quizzes});assert.deepEqual(state.quiz.one.answers,[null,null]);assert.equal(state.quiz.one.submitted,false);assert.equal(state.quiz.one.passed,false);
 assert.equal(reduceState(state,{type:'SET_DEBUG_ANSWER',id:'a',answer:99},{lessons,topics,quizzes}),state);
 assert.equal(reduceState(state,{type:'SET_MASTERY',id:'a',index:4,value:true},{lessons,topics,quizzes}),state);
 assert.equal(reduceState(state,{type:'SET_CODE',id:'removed',value:'bad'},{lessons,topics,quizzes}),state);

@@ -42,12 +42,15 @@ export function normalizeState(raw,lessons=[],topics=[],quizzes=[]){
   const current=validLessons.has(source.current)?source.current:defaults.current;
   const currentLesson=lessons.find(x=>x.id===current);
   const topic=source.topic===''?'':(validTopics.has(source.topic)?source.topic:(currentLesson?.topic||defaults.topic));
+  const legacyVisited=obj(source.comfortable)?source.comfortable:{};
+  const explicitVisited=obj(source.visited)?source.visited:{};
+  const visitedSource={...legacyVisited,...explicitVisited};
   return {
     schemaVersion:STATE_SCHEMA_VERSION,
     current,
     topic,
     comfortable:record(source.comfortable,validLessons,v=>!!v),
-    visited:record(source.visited,validLessons,v=>!!v),
+    visited:record(visitedSource,validLessons,v=>!!v),
     code:record(source.code,validLessons,v=>typeof v==='string'?v:undefined),
     mastery:record(source.mastery,validLessons,v=>Array.isArray(v)?Array.from({length:4},(_,i)=>!!v[i]):undefined),
     search:typeof source.search==='string'?source.search.slice(0,120):'',
@@ -118,9 +121,16 @@ export function reduceState(state,action,{lessons=[],topics=[],quizzes=[]}={}){
       const answer=Number(action.answer);
       if(!topic||!definition||!Number.isInteger(questionIndex)||questionIndex<0||questionIndex>=definition.questions.length||!Number.isInteger(answer)||answer<0||answer>=definition.questions[questionIndex].options.length)return state;
       const current=state.quiz[action.topic]||{answers:Array(definition.questions.length).fill(null),submitted:false,passed:false};
+      if(current.submitted)return state;
       const answers=Array.from({length:definition.questions.length},(_,index)=>current.answers?.[index]??null);
       answers[questionIndex]=answer;
       next.quiz={...state.quiz,[action.topic]:{answers,submitted:false,passed:false}};
+      return next;
+    }
+    case 'RETAKE_QUIZ': {
+      const definition=quizzes.find(item=>item.topic===action.topic);
+      if(!definition||!topics.some(item=>item.id===action.topic))return state;
+      next.quiz={...state.quiz,[action.topic]:{answers:Array(definition.questions.length).fill(null),submitted:false,passed:false}};
       return next;
     }
     case 'SUBMIT_QUIZ': {
