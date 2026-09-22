@@ -214,7 +214,7 @@ try{
   assert.notEqual(await page.evaluate(()=>document.activeElement?.matches('[data-challenge-editor]')),true,'Escape then Tab should let keyboard users leave the editor');
   await page.click('[data-start-challenge]');
   await challengeEditor.fill(`function formatUser(user) {
-  return user.name + ' — ' + (user.role || 'learner');
+  return user.name + ' - ' + (user.role || 'learner');
 }
 
 console.log(formatUser({ name: 'Mina' }));`);
