@@ -1,5 +1,6 @@
 import { TOPICS, LESSONS, getLesson, getTopic, lessonsFor, sourceName } from './curriculum.js';
 import { TOPIC_QUIZZES, getTopicQuiz } from './quizzes.js';
+import { CHALLENGES, getChallenge } from './challenges.js';
 import { formatJavaScript } from './lesson-utils.js';
 import { createDefaultState, normalizeState, reduceState, countCompletedTopics, countVisited } from './state-model.js';
 import { runWorkerCode, runDomExample, nodeProbeFor } from './runner.js';
@@ -8,25 +9,27 @@ import { renderBrowserMetrics, renderNodeMetrics } from './resource-visuals.js';
 const root=document.querySelector('#app');
 const STORE='swe-revision-labs:javascript-v3';
 const THEME_STORE='swe-revision-labs:theme';
-const CTX={lessons:LESSONS,topics:TOPICS,quizzes:TOPIC_QUIZZES};
+const CTX={lessons:LESSONS,topics:TOPICS,quizzes:TOPIC_QUIZZES,challenges:CHALLENGES};
 let state=loadState();
 let running=false;
 let domRunController=null;
 let drawerReturnFocus=null;
+let challengeTimer=null;
+let challengeCheckRunning=false;
 const SANDBOX_STOPPED_HTML='<span>Sandbox stopped. Scheduled work was discarded.</span>';
 
 function escapeHtml(value=''){
   return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 }
 function loadState(){
-  try{return normalizeState(JSON.parse(localStorage.getItem(STORE)||'{}'),LESSONS,TOPICS,TOPIC_QUIZZES)}
+  try{return normalizeState(JSON.parse(localStorage.getItem(STORE)||'{}'),LESSONS,TOPICS,TOPIC_QUIZZES,CHALLENGES)}
   catch{return createDefaultState(LESSONS,TOPICS)}
 }
 function saveState(){
   try{localStorage.setItem(STORE,JSON.stringify(state))}catch(error){console.warn('State persistence failed',error)}
 }
 function dispatch(action,{render=true}={}){
-  state=normalizeState(reduceState(state,action,CTX),LESSONS,TOPICS,TOPIC_QUIZZES);
+  state=normalizeState(reduceState(state,action,CTX),LESSONS,TOPICS,TOPIC_QUIZZES,CHALLENGES);
   saveState();
   if(render) renderApp();
 }
@@ -50,11 +53,11 @@ function scrollToPageTop(){
 function currentLesson(){return getLesson(state.current)||LESSONS[0]}
 function currentCode(lesson){return formatJavaScript(state.code[lesson.id]??lesson.code)}
 function lineNumbers(code){return code.split('\n').map((_,index)=>`<span>${index+1}</span>`).join('')}
-function editorShell(code,{label='lesson.js',readonly=false,ariaLabel='JavaScript editor'}={}){
+function editorShell(code,{label='lesson.js',readonly=false,ariaLabel='JavaScript editor',challenge=false}={}){
   const formatted=formatJavaScript(code);
   return `<div class="code-workbench ${readonly?'readonly':''}" data-editor-shell>
     <div class="editor-titlebar"><div class="editor-window-controls" aria-hidden="true"><i></i><i></i><i></i></div><div class="editor-tab"><b>JS</b><span>${escapeHtml(label)}</span></div><span class="editor-language">JavaScript</span></div>
-    <div class="editor-body"><div class="editor-gutter" data-code-gutter aria-hidden="true">${lineNumbers(formatted)}</div><textarea class="code-editor" aria-label="${escapeHtml(ariaLabel)}" data-code-editor spellcheck="false" autocomplete="off" autocapitalize="off" ${readonly?'readonly':''}>${escapeHtml(formatted)}</textarea></div>
+    <div class="editor-body"><div class="editor-gutter" data-code-gutter aria-hidden="true">${lineNumbers(formatted)}</div><textarea class="code-editor" aria-label="${escapeHtml(ariaLabel)}" data-code-editor ${challenge?'data-challenge-editor':''} spellcheck="false" autocomplete="off" autocapitalize="off" ${readonly?'readonly':''}>${escapeHtml(formatted)}</textarea></div>
     <div class="editor-statusbar"><span data-editor-line-status>${formatted.split('\n').length} ${formatted.split('\n').length===1?'line':'lines'}</span><span>JavaScript · UTF-8 · Spaces: 2</span></div>
   </div>`;
 }
@@ -92,6 +95,7 @@ function drawer(){
     <nav class="drawer-nav">
       <button data-nav="home"><span>01</span><b>Learn</b><small>Continue your current concept</small><em>→</em></button>
       <button data-nav="index"><span>02</span><b>Full index</b><small>${LESSONS.length} lessons · searchable</small><em>→</em></button>
+      <button data-nav="practice"><span>03</span><b>Timed practice</b><small>Write, run, and verify code</small><em>→</em></button>
     </nav>
     <button class="theme-toggle" data-theme-toggle aria-pressed="${dark}" aria-label="Switch to ${dark?'light':'dark'} mode">${themeToggleMarkup()}</button>
     <div class="drawer-topics"><p class="eyebrow">Topics</p>${TOPICS.map(topic=>`<button data-topic="${topic.id}">${escapeHtml(topic.title)}<span>${lessonsFor(topic.id).length}</span></button>`).join('')}</div>
@@ -110,6 +114,7 @@ function homeView(){
       <div class="progress-block"><div><span>Topics completed</span><strong>${completed}/${TOPICS.length}</strong></div><div class="progress-line" role="progressbar" aria-label="Topics completed" aria-valuemin="0" aria-valuemax="${TOPICS.length}" aria-valuenow="${completed}"><i style="width:${percent(completed,TOPICS.length)}%"></i></div></div></div>
     </section>
     <section class="continue-card reveal delay-1"><div><span class="tag">Continue</span><h2>${escapeHtml(resume.title)}</h2><p>${escapeHtml(getTopic(resume.topic)?.title||'')} · ${sourceName(resume.source)}</p></div><div class="continue-flow"><span>concept</span><b>→</b><span>code</span><b>→</b><span>run</span><b>→</b><span>machine</span></div><button class="primary" data-lesson="${resume.id}">Open lesson</button></section>
+    <section class="practice-promo reveal delay-2"><div><p class="eyebrow">Timed practice</p><h2>Can you write it under pressure?</h2><p>Short, unique JavaScript tasks with a real timer and output verification. Your editor stays familiar; the answer has to run.</p></div><div class="practice-promo-meta"><span>${CHALLENGES.length} challenges</span><span>${Math.min(...CHALLENGES.map(challenge=>challenge.seconds))}–${Math.max(...CHALLENGES.map(challenge=>challenge.seconds))} seconds</span><button class="secondary" data-nav="practice">Start practising →</button></div></section>
     <section class="section reveal delay-2"><div class="section-head"><div><p class="eyebrow">Curriculum</p><h2>Pick one topic</h2></div><button class="text-button" data-nav="index">Full index →</button></div><div class="topic-grid">${topicCards}</div></section>
     <section class="host-compare reveal delay-3"><article><p class="eyebrow">Client</p><h3>Browser host</h3><p>JavaScript engine plus DOM, events, rendering, fetch, storage, workers and WebSocket.</p><div class="mini-machine"><span>JS</span><b>+</b><span>Web APIs</span><b>+</b><span>renderer</span></div></article><article><p class="eyebrow">Backend</p><h3>Node.js host</h3><p>JavaScript engine plus process, filesystem, network, buffers, streams, libuv and OS resources.</p><div class="mini-machine"><span>JS</span><b>+</b><span>Node</span><b>+</b><span>OS</span></div></article></section>
   </main>`);
@@ -194,6 +199,113 @@ function syncCodeEditor(){
   const status=root.querySelector('[data-editor-line-status]');
   if(status)status.textContent=`${lines} ${lines===1?'line':'lines'}`;
 }
+function updateEditorValue(editor,value,start=editor.selectionStart,end=start){
+  editor.value=value;
+  editor.selectionStart=Math.max(0,Math.min(value.length,start));
+  editor.selectionEnd=Math.max(0,Math.min(value.length,end));
+  editor.dispatchEvent(new Event('input',{bubbles:true}));
+  syncCodeEditor();
+}
+function indentEditor(editor,unindent=false){
+  const value=editor.value;
+  const start=editor.selectionStart;
+  const end=editor.selectionEnd;
+  const lineStart=value.lastIndexOf('\n',Math.max(0,start-1))+1;
+  const endMarker=value.indexOf('\n',end);
+  const lineEnd=endMarker===-1?value.length:endMarker;
+  const selected=value.slice(lineStart,lineEnd);
+  if(start===end&&!unindent){updateEditorValue(editor,value.slice(0,start)+'  '+value.slice(end),start+2,end+2);return}
+  const lines=selected.split('\n');
+  let changed=0;
+  const next=lines.map(line=>{
+    if(unindent){const match=line.match(/^ {1,2}/);if(match){changed+=match[0].length;return line.slice(match[0].length)}}
+    else {changed+=2;return `  ${line}`}
+    return line;
+  }).join('\n');
+  const nextValue=value.slice(0,lineStart)+next+value.slice(lineEnd);
+  const delta=unindent?-changed:changed;
+  updateEditorValue(editor,nextValue,lineStart,end+delta);
+}
+function formatEditor(editor){
+  updateEditorValue(editor,formatJavaScript(editor.value),editor.selectionStart,editor.selectionEnd);
+}
+function toggleEditorComment(editor){
+  const value=editor.value;
+  const start=editor.selectionStart;
+  const end=editor.selectionEnd;
+  const lineStart=value.lastIndexOf('\n',Math.max(0,start-1))+1;
+  const endMarker=value.indexOf('\n',end);
+  const lineEnd=endMarker===-1?value.length:endMarker;
+  const selected=value.slice(lineStart,lineEnd);
+  const lines=selected.split('\n');
+  const uncomment=lines.every(line=>!line.trim()||/^\s*\/\//.test(line));
+  let offset=0;
+  const next=lines.map(line=>{
+    if(uncomment){const match=line.match(/^(\s*)\/\/ ?/);if(!match)return line;offset-=match[0].length;return match[1]+line.slice(match[0].length)}
+    offset+=3;return line?`// ${line}`:'// ';
+  }).join('\n');
+  updateEditorValue(editor,value.slice(0,lineStart)+next+value.slice(lineEnd),Math.max(lineStart,start+offset),Math.max(lineStart,end+offset));
+}
+function moveEditorLine(editor,direction){
+  const value=editor.value;
+  const start=editor.selectionStart;
+  const end=editor.selectionEnd;
+  const first=value.lastIndexOf('\n',Math.max(0,start-1))+1;
+  const lines=value.split('\n');
+  const lineIndex=value.slice(0,first).split('\n').length-1;
+  const targetIndex=lineIndex+direction;
+  if(targetIndex<0||targetIndex>=lines.length)return;
+  const columnStart=start-first;
+  const columnEnd=end-first;
+  [lines[lineIndex],lines[targetIndex]]=[lines[targetIndex],lines[lineIndex]];
+  const nextValue=lines.join('\n');
+  const nextFirst=lines.slice(0,targetIndex).reduce((sum,line)=>sum+line.length+1,0);
+  updateEditorValue(editor,nextValue,nextFirst+columnStart,nextFirst+columnEnd);
+}
+function handleEditorShortcut(event){
+  const editor=event.target.closest?.('[data-code-editor]');
+  if(!editor)return false;
+  if(editor.readOnly)return false;
+  if(event.key==='Escape'){
+    editor.dataset.tabOut='true';
+    return false;
+  }
+  if(event.key==='Tab'&&editor.dataset.tabOut==='true'){
+    delete editor.dataset.tabOut;
+    return false;
+  }
+  delete editor.dataset.tabOut;
+  const modifier=event.ctrlKey||event.metaKey;
+  if(modifier&&event.key.toLowerCase()==='s'){
+    event.preventDefault();
+    return true;
+  }
+  if(modifier&&event.key==='Enter'){
+    event.preventDefault();
+    if(editor.matches('[data-challenge-editor]')){
+      const challenge=challengeForState();
+      if(!state.challenge.startedAt&&!state.challenge.results[challenge.id])startChallenge();
+      else submitChallenge(false);
+    }else runCurrent(false);
+    return true;
+  }
+  if(event.shiftKey&&event.altKey&&event.key.toLowerCase()==='f'){
+    event.preventDefault();formatEditor(editor);return true;
+  }
+  if(modifier&&event.key==='/'){
+    event.preventDefault();toggleEditorComment(editor);return true;
+  }
+  if(event.key==='Tab'){
+    event.preventDefault();indentEditor(editor,event.shiftKey);return true;
+  }
+  if(event.altKey&&event.key==='ArrowUp'){
+    event.preventDefault();moveEditorLine(editor,-1);return true;
+  }
+  if(event.altKey&&event.key==='ArrowDown'){
+    event.preventDefault();moveEditorLine(editor,1);return true;
+  }
+  return false;
+}
 function quizView(topicId){
   const topic=getTopic(topicId);
   const quiz=getTopicQuiz(topicId);
@@ -208,6 +320,72 @@ function quizView(topicId){
   }).join('');
   const quizAction=progress.submitted?`<button class="secondary" type="button" data-retake-quiz data-quiz-topic="${topicId}">${progress.passed?'Retake quiz':'Try again'}</button>`:`<button class="primary" type="button" data-submit-quiz data-quiz-topic="${topicId}" ${answered<quiz.questions.length?'disabled':''}>Submit quiz</button>`;
   return chrome(`<main class="page quiz-page"><section class="quiz-head reveal"><button class="back" data-topic="${topicId}">← ${escapeHtml(topic.title)}</button><p class="eyebrow">End-of-topic assessment</p><h1>${escapeHtml(quiz.title)}</h1><p class="lead">Answer the questions without looking back. You need all ${quiz.questions.length} answers selected before you can submit, and every answer must be correct to pass.</p><div class="quiz-progress"><span>${answered}/${quiz.questions.length} answered</span><span>${progress.submitted?`${score}/${quiz.questions.length}`:'not submitted'}</span></div></section><section class="quiz-card reveal delay-1"><form>${questionMarkup}<div class="quiz-actions">${quizAction}${progress.submitted?`<span class="quiz-result ${progress.passed?'passed':'failed'}">${progress.passed?'✓ Topic passed':'Keep practising'} · ${score}/${quiz.questions.length}</span>`:''}</div></form></section><section class="quiz-footer reveal delay-2"><p>${progress.passed?'You have demonstrated the core ideas in this topic.':'You can retry this quiz at any time; changing an answer resets the current attempt.'}</p><div class="lesson-actions"><button class="secondary" data-topic="${topicId}">Review topic lessons</button>${progress.passed&&last?`<button class="primary" data-lesson="${nextLesson(last)?.id||last.id}">${nextLesson(last)?'Continue to next topic':'Back to the final lesson'} →</button>`:''}</div></section></main>`);
+}
+function challengeOutput(lines=[]){return lines.map(line=>String(line).trimEnd()).join('\n').trim()}
+function challengeTimerText(seconds){const value=Math.max(0,Math.ceil(seconds));return `${String(Math.floor(value/60)).padStart(2,'0')}:${String(value%60).padStart(2,'0')}`}
+function challengeForState(){return getChallenge(state.challenge.currentId)||CHALLENGES.find(challenge=>!state.challenge.completed.includes(challenge.id))||CHALLENGES[0]}
+function challengeView(){
+  const completed=state.challenge.completed.length;
+  if(completed>=CHALLENGES.length)return chrome(`<main class="page practice-page"><section class="practice-complete reveal"><p class="eyebrow">Practice complete</p><h1>${CHALLENGES.length} tasks. One stronger muscle.</h1><p class="lead">You have worked through every timed challenge. Run them again whenever you want to sharpen a specific JavaScript pattern.</p><div class="practice-complete-stat"><strong>${CHALLENGES.length}/${CHALLENGES.length}</strong><span>challenges attempted</span></div><div class="lesson-actions"><button class="secondary" data-reset-challenges>Start over</button><button class="primary" data-nav="home">Back to learning →</button></div></section></main>`);
+  const challenge=challengeForState();
+  const result=state.challenge.results[challenge.id];
+  const active=!!state.challenge.startedAt&&!result;
+  const code=state.challenge.code[challenge.id]??challenge.starter;
+  const completedLabel=`${completed}/${CHALLENGES.length} completed`;
+  const resultOutput=result?challengeOutput(result.output?[result.output]:[]):'';
+  const resultPanel=result?`<div class="challenge-result ${result.passed?'passed':'failed'}" data-challenge-result><div class="challenge-result-head"><strong>${result.passed?'✓ Output verified':'✕ Output did not match'}</strong><span>${result.clockExpired?'time expired':result.timedOut?'execution timed out':`${result.duration}s used`}</span></div><p>${result.passed?'The code ran successfully and produced the expected output.':'The code ran, but the verifier found a mismatch. Compare the actual and expected output, then retry or continue.'}</p><div class="challenge-output-grid"><div><span>Actual output</span><pre>${escapeHtml(resultOutput||'No output')}</pre></div><div><span>Expected output</span><pre>${escapeHtml(challenge.expected.join('\n'))}</pre></div></div></div>`:'';
+  const action=result?`<button class="secondary" data-reset-challenge>Retry task</button>${completed<CHALLENGES.length?'<button class="primary" data-next-challenge>Next challenge →</button>':'<button class="primary" data-nav="home">Back to learning →</button>'}`:active?'<button class="secondary" data-reset-challenge>Reset task</button><button class="primary" data-check-challenge>Check output</button>':'<button class="primary" data-start-challenge>Start timer →</button>';
+  return chrome(`<main class="page practice-page"><section class="practice-head reveal"><button class="back" data-nav="home">← Learn</button><div class="practice-head-row"><div><p class="eyebrow">Timed practice</p><h1>Write it. Run it. Prove it.</h1><p class="lead">One short JavaScript task at a time. Every challenge has its own time budget, a unique prompt, and a strict output check.</p></div><div class="practice-progress"><strong>${completedLabel}</strong><span>${state.challenge.attempts[challenge.id]||0} attempt${state.challenge.attempts[challenge.id]===1?'':'s'} on this task</span></div></div></section><section class="challenge-card reveal delay-1"><div class="challenge-top"><div><span class="challenge-kicker">${escapeHtml(challenge.difficulty)}</span><p class="eyebrow">${escapeHtml(challenge.topic)}</p><h2 data-challenge-title>${escapeHtml(challenge.title)}</h2></div><div class="challenge-clock"><span>Time limit</span><strong data-challenge-timer>${challengeTimerText(active?(challenge.seconds-(Date.now()-state.challenge.startedAt)/1000):challenge.seconds)}</strong></div></div><p class="challenge-prompt">${escapeHtml(challenge.prompt)}</p><div class="challenge-meta"><span>Task ${String(CHALLENGES.indexOf(challenge)+1).padStart(2,'0')} of ${String(CHALLENGES.length).padStart(2,'0')}</span><span>Output is verified after execution</span></div>${editorShell(code,{label:`${challenge.id}.js`,ariaLabel:'Timed challenge JavaScript editor',challenge,readonly:!!result})}<div class="challenge-shortcuts"><span>VS Code shortcuts</span><kbd>Tab</kbd> indent <kbd>⌘/Ctrl</kbd><kbd>Enter</kbd> run <kbd>Shift</kbd><kbd>Alt</kbd><kbd>F</kbd> format</div><p class="challenge-hint">Hint: ${escapeHtml(challenge.hint)}</p><div class="runner-actions challenge-actions">${action}</div>${resultPanel}</section></main>`);
+}
+function stopChallengeTimer(){if(challengeTimer){clearInterval(challengeTimer);challengeTimer=null}}
+function updateChallengeTimer(){
+  const challenge=challengeForState();
+  const element=root.querySelector('[data-challenge-timer]');
+  if(!challenge||!state.challenge.startedAt||state.challenge.results[challenge.id]){stopChallengeTimer();return}
+  const remaining=challenge.seconds-(Date.now()-state.challenge.startedAt)/1000;
+  if(element){element.textContent=challengeTimerText(remaining);element.classList.toggle('urgent',remaining<=10)}
+  if(remaining<=0){stopChallengeTimer();submitChallenge(true)}
+}
+function syncChallengeTimer(){
+  stopChallengeTimer();
+  if(route().view!=='practice')return;
+  const challenge=challengeForState();
+  if(!state.challenge.startedAt||state.challenge.results[challenge.id])return;
+  const remaining=challenge.seconds-(Date.now()-state.challenge.startedAt)/1000;
+  if(remaining<=0){submitChallenge(true);return}
+  updateChallengeTimer();
+  challengeTimer=setInterval(updateChallengeTimer,250);
+}
+function startChallenge(){
+  const challenge=challengeForState();
+  if(!challenge||state.challenge.results[challenge.id])return;
+  dispatch({type:'START_CHALLENGE',id:challenge.id,startedAt:Date.now()},{render:false});
+  renderApp();
+}
+async function submitChallenge(timedOut=false){
+  if(challengeCheckRunning)return;
+  const challenge=challengeForState();
+  const editor=root.querySelector('[data-challenge-editor]');
+  if(!challenge||!editor||state.challenge.results[challenge.id])return;
+  challengeCheckRunning=true;
+  stopChallengeTimer();
+  const startedAt=state.challenge.startedAt||Date.now();
+  const elapsed=(Date.now()-startedAt)/1000;
+  const check=root.querySelector('[data-check-challenge]');
+  if(check){check.disabled=true;check.textContent='Checking output…'}
+  if(timedOut){
+    dispatch({type:'RECORD_CHALLENGE_RESULT',id:challenge.id,result:{passed:false,timedOut:true,clockExpired:true,duration:challenge.seconds,output:'Time expired before verification.'}},{render:false});
+    challengeCheckRunning=false;
+    renderApp();
+    return;
+  }
+  const result=await runWorkerCode(editor.value,{timeout:2200});
+  const actual=challengeOutput(result.lines||[]);
+  const output=actual||String(result.error||'No output');
+  const passed=!timedOut&&result.ok&&actual===challenge.expected.join('\n');
+  dispatch({type:'RECORD_CHALLENGE_RESULT',id:challenge.id,result:{passed,timedOut:timedOut||!!result.timeout,clockExpired:false,duration:Math.min(challenge.seconds,Math.max(0,Math.round(elapsed))),output}},{render:false});
+  challengeCheckRunning=false;
+  renderApp();
 }
 function tips(lesson){return `<div class="insight-grid"><article><p class="eyebrow">Traps</p><ul>${lesson.traps.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul></article><article><p class="eyebrow">Useful tips</p><ul>${lesson.tips.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul></article></div>`}
 function debugBlock(lesson){
@@ -270,18 +448,23 @@ function renderApp(){
     if(r.view==='lesson'){
       const lesson=getLesson(r.id);
       if(!lesson){navigate('index');return}
-      state=normalizeState(reduceState(state,{type:'OPEN_LESSON',id:lesson.id},CTX),LESSONS,TOPICS,TOPIC_QUIZZES); saveState();
+      state=normalizeState(reduceState(state,{type:'OPEN_LESSON',id:lesson.id},CTX),LESSONS,TOPICS,TOPIC_QUIZZES,CHALLENGES); saveState();
       root.innerHTML=lessonView(lesson);
       const trace=root.querySelector('[data-expression-trace]');
       if(trace)renderExpressionTrace(trace,0);
       syncCodeEditor();
     } else if(r.view==='index') root.innerHTML=indexView();
+    else if(r.view==='practice'){
+      root.innerHTML=challengeView();
+      syncCodeEditor();
+    }
     else if(r.view==='quiz'){
       if(!getTopic(r.id)||!getTopicQuiz(r.id)){navigate('index');return}
       root.innerHTML=quizView(r.id);
     }
     else root.innerHTML=homeView();
   }catch(error){console.error(error);root.innerHTML=errorView(error)}
+  syncChallengeTimer();
 }
 
 function openDrawer(){
@@ -362,6 +545,11 @@ root.addEventListener('click',event=>{
     target.innerHTML=themeToggleMarkup();
     return;
   }
+  if(target.hasAttribute('data-start-challenge')){startChallenge();return}
+  if(target.hasAttribute('data-check-challenge')){submitChallenge(false);return}
+  if(target.hasAttribute('data-reset-challenge')){dispatch({type:'RESET_CHALLENGE',id:challengeForState().id});return}
+  if(target.hasAttribute('data-next-challenge')){dispatch({type:'NEXT_CHALLENGE'});return}
+  if(target.hasAttribute('data-reset-challenges')){dispatch({type:'RESET_CHALLENGES'});return}
   if(target.dataset.nav){event.preventDefault();navigate(target.dataset.nav);return}
   if(target.hasAttribute('data-topic')){
     const id=target.dataset.topic||'';
@@ -386,6 +574,7 @@ root.addEventListener('click',event=>{
 
 root.addEventListener('input',event=>{
   const input=event.target;
+  if(input.matches('[data-challenge-editor]')){syncCodeEditor();dispatch({type:'SET_CHALLENGE_CODE',id:challengeForState().id,value:input.value},{render:false});return}
   if(input.matches('[data-code-editor]')){syncCodeEditor();dispatch({type:'SET_CODE',id:currentLesson().id,value:input.value},{render:false});return}
   if(input.matches('[data-search]')){dispatch({type:'SET_SEARCH',value:input.value},{render:false});updateIndexRows();return}
 });
@@ -397,7 +586,7 @@ root.addEventListener('scroll',event=>{
 },true);
 root.addEventListener('click',event=>{if(event.target.matches('[data-drawer-backdrop]'))closeDrawer()});
 window.addEventListener('hashchange',()=>{renderApp();scrollToPageTop()});
-window.addEventListener('keydown',event=>{if(event.key==='Escape')closeDrawer()});
+window.addEventListener('keydown',event=>{if(handleEditorShortcut(event))return;if(event.key==='Escape')closeDrawer()});
 
 async function removeLegacyWorkers(){
   if(!('serviceWorker'in navigator))return;
