@@ -183,6 +183,30 @@ try{
   assert.match(afterCompletedStop.sandboxNote,/Sandbox stopped/,'the sandbox host must state its stopped lifecycle');
   assert.match(afterCompletedStop.sandboxNote,/still stand/,'the stopped note must say the completed measurements remain valid');
   assert.equal(afterCompletedStop.metrics,metricsBefore,'the completed run’s measurements must remain displayed');
+
+  // Timed practice: the challenge route should expose a real editor, retain
+  // code locally, verify output, and advance only after the task is complete.
+  await page.goto(`${base}/index.html#practice`);
+  const firstChallenge=await page.locator('[data-challenge-title]').textContent();
+  assert.ok(firstChallenge,'the practice route must render a challenge');
+  const challengeEditor=page.locator('[data-challenge-editor]');
+  await challengeEditor.click();
+  await challengeEditor.press('Control+End');
+  await challengeEditor.press('Tab');
+  assert.match(await challengeEditor.inputValue(),/  $/,'Tab should insert editor indentation');
+  await page.click('[data-start-challenge]');
+  await challengeEditor.fill(`function formatUser(user) {
+  return user.name + ' — ' + (user.role || 'learner');
+}
+
+console.log(formatUser({ name: 'Mina' }));`);
+  await challengeEditor.press('Control+Enter');
+  await page.waitForSelector('[data-challenge-result]');
+  const challengeResult=await page.locator('[data-challenge-result]').textContent();
+  assert.match(challengeResult,/Output verified/,'a correct challenge must be verified');
+  await page.click('[data-next-challenge]');
+  await page.waitForFunction(title=>document.querySelector('[data-challenge-title]')?.textContent!==title,firstChallenge);
+  assert.notEqual(await page.locator('[data-challenge-title]').textContent(),firstChallenge,'Next challenge must advance to a unique task');
   console.log('Browser lifecycle contracts passed.');
 }finally{
   await browser.close();

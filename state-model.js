@@ -1,4 +1,4 @@
-export const STATE_SCHEMA_VERSION=5;
+export const STATE_SCHEMA_VERSION=6;
 
 function obj(value){ return value && typeof value==='object' && !Array.isArray(value); }
 function record(raw,valid,mapper){
@@ -29,15 +29,27 @@ export function createDefaultState(lessons=[],topics=[]){
     metrics:{},
     nodeMetrics:{},
     debug:{},
-    quiz:{}
+    quiz:{},
+    challenge:{currentId:'',startedAt:null,attempts:{},completed:[],results:{},code:{}}
   };
 }
 
-export function normalizeState(raw,lessons=[],topics=[],quizzes=[]){
+function cleanChallengeResult(value){
+  if(!obj(value)) return undefined;
+  return {
+    passed:!!value.passed,
+    timedOut:!!value.timedOut,
+    duration:Number.isFinite(Number(value.duration))?Math.max(0,Number(value.duration)):0,
+    output:typeof value.output==='string'?value.output.slice(0,4000):''
+  };
+}
+
+export function normalizeState(raw,lessons=[],topics=[],quizzes=[],challenges=[]){
   const defaults=createDefaultState(lessons,topics);
   const source=obj(raw)?raw:{};
   const validLessons=new Set(lessons.map(x=>x.id));
   const validTopics=new Set(topics.map(x=>x.id));
+  const validChallenges=new Set(challenges.map(x=>x.id));
   const quizByTopic=new Map(quizzes.map(quiz=>[quiz.topic,quiz]));
   const current=validLessons.has(source.current)?source.current:defaults.current;
   const currentLesson=lessons.find(x=>x.id===current);
@@ -71,13 +83,24 @@ export function normalizeState(raw,lessons=[],topics=[],quizzes=[]){
         return Number.isInteger(answer)&&answer>=0&&answer<definition.questions[index].options.length?answer:null;
       });
       return {answers,submitted:!!value.submitted,passed:!!value.passed};
-    })
+    }),
+    challenge:(()=>{
+      const value=obj(source.challenge)?source.challenge:{};
+      const currentId=validChallenges.has(value.currentId)?value.currentId:(challenges[0]?.id||'');
+      const attempts=record(value.attempts,validChallenges,v=>Number.isInteger(v)&&v>=0?v:undefined);
+      const results=record(value.results,validChallenges,cleanChallengeResult);
+      const code=record(value.code,validChallenges,v=>typeof v==='string'?v.slice(0,20000):undefined);
+      const completed=Array.isArray(value.completed)?[...new Set(value.completed.filter(id=>validChallenges.has(id)))]:[];
+      const startedAt=Number.isFinite(Number(value.startedAt))&&Number(value.startedAt)>0?Number(value.startedAt):null;
+      return {currentId,startedAt,attempts,completed,results,code};
+    })()
   };
 }
 
-export function reduceState(state,action,{lessons=[],topics=[],quizzes=[]}={}){
+export function reduceState(state,action,{lessons=[],topics=[],quizzes=[],challenges=[]}={}){
   const next={...state};
   const validLesson=lessons.some(lesson=>lesson.id===action.id);
+  const validChallenge=challenges.some(challenge=>challenge.id===action.id);
   switch(action.type){
     case 'OPEN_LESSON':{
       const lesson=lessons.find(x=>x.id===action.id);
@@ -142,6 +165,50 @@ export function reduceState(state,action,{lessons=[],topics=[],quizzes=[]}={}){
       next.quiz={...state.quiz,[action.topic]:{...current,submitted:true,passed}};
       return next;
     }
+    case 'START_CHALLENGE': {
+      if(!validChallenge)return state;
+      const startedAt=Number(action.startedAt);
+      if(!Number.isFinite(startedAt)||startedAt<=0)return state;
+      next.challenge={...state.challenge,currentId:action.id,startedAt};
+      return next;
+    }
+    case 'SET_CHALLENGE_CODE': {
+      if(!validChallenge)return state;
+      next.challenge={...state.challenge,code:{...state.challenge.code,[action.id]:String(action.value??'')}};
+      return next;
+    }
+    case 'RECORD_CHALLENGE_RESULT': {
+      if(!validChallenge||!obj(action.result))return state;
+      const result=cleanChallengeResult(action.result);
+      if(!result)return state;
+      const attempts=(state.challenge.attempts?.[action.id]||0)+1;
+      const completed=state.challenge.completed?.includes(action.id)?state.challenge.completed:[...(state.challenge.completed||[]),action.id];
+      next.challenge={...state.challenge, currentId:action.id, startedAt:null, attempts:{...state.challenge.attempts,[action.id]:attempts}, completed, results:{...state.challenge.results,[action.id]:result}};
+      return next;
+    }
+    case 'RESET_CHALLENGE': {
+      if(!validChallenge)return state;
+      const results={...state.challenge.results};
+      const attempts={...state.challenge.attempts};
+      const code={...state.challenge.code};
+      delete results[action.id];
+      delete attempts[action.id];
+      delete code[action.id];
+      next.challenge={...state.challenge,currentId:action.id,startedAt:null,attempts,results,code,completed:(state.challenge.completed||[]).filter(id=>id!==action.id)};
+      return next;
+    }
+    case 'NEXT_CHALLENGE': {
+      if(!challenges.length)return state;
+      const completed=new Set(state.challenge.completed||[]);
+      const currentIndex=challenges.findIndex(challenge=>challenge.id===state.challenge.currentId);
+      const ordered=[...challenges.slice(Math.max(0,currentIndex+1)),...challenges.slice(0,Math.max(0,currentIndex+1))];
+      const nextChallenge=ordered.find(challenge=>!completed.has(challenge.id));
+      next.challenge={...state.challenge,currentId:nextChallenge?.id||'',startedAt:null};
+      return next;
+    }
+    case 'RESET_CHALLENGES':
+      next.challenge={currentId:challenges[0]?.id||'',startedAt:null,attempts:{},completed:[],results:{},code:{}};
+      return next;
     default:return state;
   }
 }
