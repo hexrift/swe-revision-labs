@@ -37,6 +37,8 @@ assert.match(source,/code-workbench/);
 assert.match(source,/data-code-gutter/);
 assert.match(source,/lesson-brief/);
 assert.match(source,/Why the right-hand example is better/);
+assert.match(source,/lesson\.useWhen/);
+assert.match(source,/When to use it/);
 assert.match(source,/syncCodeEditor/);
 assert.match(source,/gutter\.scrollTop=editor\.scrollTop/);
 assert.match(source,/What this lab is diagnosing/);
