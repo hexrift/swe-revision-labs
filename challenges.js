@@ -7,13 +7,13 @@ export const CHALLENGES=[
     topic:'Functions and defaults',
     difficulty:'Warm-up',
     seconds:75,
-    prompt:'Write formatUser so it returns “Name — role”. If role is missing, use “learner”. Log the result for the supplied user.',
+    prompt:'Write formatUser so it returns “Name - role”. If role is missing, use “learner”. Log the result for the supplied user.',
     starter:`function formatUser(user) {
-  // Return: Name — role
+  // Return: Name - role
 }
 
 console.log(formatUser({ name: 'Mina' }));`,
-    expected:['Mina — learner'],
+    expected:['Mina - learner'],
     hint:'Destructure the object parameter and give role a default value.',
     source:MDN+'/Reference/Functions/Default_parameters'
   },
@@ -142,6 +142,77 @@ console.log(square.getCalculations());`,
     expected:['49','49','1'],
     hint:'A Map is useful for a private cache; count only when a value is not already cached.',
     source:MDN+'/Reference/Global_Objects/Map'
+  },
+  {
+    id:'flatten-batches',
+    title:'Flatten number batches',
+    topic:'Arrays and flatMap',
+    difficulty:'Intermediate',
+    seconds:90,
+    prompt:'Combine the number batches into one flat list without mutating the original batches. Log the values separated by “ | ”.',
+    starter:`const batches = [[1, 2], [3], [4, 5]];
+
+const values = [];
+console.log(values.join(' | '));`,
+    expected:['1 | 2 | 3 | 4 | 5'],
+    hint:'flatMap can map each batch to its items and flatten the resulting one-level array.',
+    source:MDN+'/Reference/Global_Objects/Array/flatMap'
+  },
+  {
+    id:'count-statuses',
+    title:'Count job statuses',
+    topic:'Objects and iteration',
+    difficulty:'Intermediate',
+    seconds:90,
+    prompt:'Count how many jobs are done and pending. Log one line in the form “done=N, pending=N”.',
+    starter:`const jobs = [
+  { status: 'done' },
+  { status: 'pending' },
+  { status: 'done' },
+  { status: 'pending' }
+];
+
+const counts = {};
+console.log(\`done=\${counts.done || 0}, pending=\${counts.pending || 0}\`);`,
+    expected:['done=2, pending=2'],
+    hint:'Use the status as a dynamic object key and increment from a zero default.',
+    source:MDN+'/JavaScript/Reference/Operators/Property_accessors'
+  },
+  {
+    id:'safe-city',
+    title:'Read an optional address',
+    topic:'Optional chaining and defaults',
+    difficulty:'Core',
+    seconds:75,
+    prompt:'Implement getCity so it returns the city when an address exists, or “unknown” when it does not. Log both supplied profiles.',
+    starter:`function getCity(profile) {
+  // Read the nested city safely.
+}
+
+console.log(getCity({ address: { city: 'Oslo' } }));
+console.log(getCity({}));`,
+    expected:['Oslo','unknown'],
+    hint:'Optional chaining handles the missing address; nullish coalescing supplies the fallback.',
+    source:MDN+'/JavaScript/Reference/Operators/Optional_chaining'
+  },
+  {
+    id:'rank-scores',
+    title:'Rank scores without mutation',
+    topic:'Sorting and copying',
+    difficulty:'Advanced',
+    seconds:105,
+    prompt:'Sort the score records from highest to lowest without changing scores. Log the ranked names separated by “ > ”.',
+    starter:`const scores = [
+  { name: 'Asha', score: 8 },
+  { name: 'Mina', score: 12 },
+  { name: 'Omar', score: 5 }
+];
+
+const ranking = [];
+console.log(ranking.join(' > '));`,
+    expected:['Mina > Asha > Omar'],
+    hint:'Copy the array before sorting, then compare scores in descending order.',
+    source:MDN+'/Reference/Global_Objects/Array/sort'
   }
 ];
 
