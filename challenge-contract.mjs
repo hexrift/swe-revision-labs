@@ -11,6 +11,7 @@ for(const challenge of CHALLENGES){
   assert.ok(Number.isInteger(challenge.seconds)&&challenge.seconds>=60,'each challenge has a meaningful time limit');
   assert.ok(Array.isArray(challenge.expected)&&challenge.expected.length>0,'each challenge has expected output');
   assert.ok(challenge.hint&&challenge.source.startsWith('https://developer.mozilla.org/'),'each challenge has a source-backed hint');
+  assert.doesNotMatch(challenge.source,/JavaScript\/JavaScript/,'MDN source paths must not duplicate the JavaScript segment');
 }
 assert.equal(CHALLENGES.find(challenge=>challenge.id==='format-user').expected[0],'Mina - learner','the keyboard-friendly challenge must use a standard hyphen');
 console.log('Challenge contracts passed.');

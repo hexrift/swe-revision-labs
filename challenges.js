@@ -51,7 +51,7 @@ const counter = makeCounter(3);
 console.log(counter(), counter(), counter());`,
     expected:['4 5 6'],
     hint:'The returned function must close over a binding that survives between calls.',
-    source:MDN+'/JavaScript/Closures'
+    source:MDN+'/Closures'
   },
   {
     id:'group-events',
@@ -89,7 +89,7 @@ console.log(grouped.click.map(event => event.user).join(', '));`,
 await boot();`,
     expected:['fetch → parse → render'],
     hint:'Await each Promise before starting the next stage; the array is your observable trace.',
-    source:MDN+'/JavaScript/Reference/Statements/async_function'
+    source:MDN+'/Reference/Statements/async_function'
   },
   {
     id:'unique-tags',
@@ -121,7 +121,7 @@ console.log(safeDivide(24, 3));
 console.log(safeDivide(24, 0));`,
     expected:['OK: 8','ERR: Cannot divide by zero'],
     hint:'Validate the denominator before dividing; keep the function’s result easy to inspect.',
-    source:MDN+'/JavaScript/Reference/Statements/try...catch'
+    source:MDN+'/Reference/Statements/try...catch'
   },
   {
     id:'memoized-square',
@@ -176,7 +176,7 @@ const counts = {};
 console.log(\`done=\${counts.done || 0}, pending=\${counts.pending || 0}\`);`,
     expected:['done=2, pending=2'],
     hint:'Use the status as a dynamic object key and increment from a zero default.',
-    source:MDN+'/JavaScript/Reference/Operators/Property_accessors'
+    source:MDN+'/Reference/Operators/Property_accessors'
   },
   {
     id:'safe-city',
@@ -193,7 +193,7 @@ console.log(getCity({ address: { city: 'Oslo' } }));
 console.log(getCity({}));`,
     expected:['Oslo','unknown'],
     hint:'Optional chaining handles the missing address; nullish coalescing supplies the fallback.',
-    source:MDN+'/JavaScript/Reference/Operators/Optional_chaining'
+    source:MDN+'/Reference/Operators/Optional_chaining'
   },
   {
     id:'rank-scores',
