@@ -224,7 +224,7 @@ function indentEditor(editor,unindent=false){
   }).join('\n');
   const nextValue=value.slice(0,lineStart)+next+value.slice(lineEnd);
   const delta=unindent?-changed:changed;
-  updateEditorValue(editor,nextValue,lineStart,start===end?start:start+delta,end+delta);
+  updateEditorValue(editor,nextValue,lineStart,end+delta);
 }
 function formatEditor(editor){
   updateEditorValue(editor,formatJavaScript(editor.value),editor.selectionStart,editor.selectionEnd);
@@ -265,6 +265,16 @@ function moveEditorLine(editor,direction){
 function handleEditorShortcut(event){
   const editor=event.target.closest?.('[data-code-editor]');
   if(!editor)return false;
+  if(editor.readOnly)return false;
+  if(event.key==='Escape'){
+    editor.dataset.tabOut='true';
+    return false;
+  }
+  if(event.key==='Tab'&&editor.dataset.tabOut==='true'){
+    delete editor.dataset.tabOut;
+    return false;
+  }
+  delete editor.dataset.tabOut;
   const modifier=event.ctrlKey||event.metaKey;
   if(modifier&&event.key.toLowerCase()==='s'){
     event.preventDefault();
@@ -323,7 +333,7 @@ function challengeView(){
   const code=state.challenge.code[challenge.id]??challenge.starter;
   const completedLabel=`${completed}/${CHALLENGES.length} completed`;
   const resultOutput=result?challengeOutput(result.output?[result.output]:[]):'';
-  const resultPanel=result?`<div class="challenge-result ${result.passed?'passed':'failed'}" data-challenge-result><div class="challenge-result-head"><strong>${result.passed?'✓ Output verified':'✕ Output did not match'}</strong><span>${result.timedOut?'time expired':`${result.duration}s used`}</span></div><p>${result.passed?'The code ran successfully and produced the expected output.':'The code ran, but the verifier found a mismatch. Compare the actual and expected output, then retry or continue.'}</p><div class="challenge-output-grid"><div><span>Actual output</span><pre>${escapeHtml(resultOutput||'No output')}</pre></div><div><span>Expected output</span><pre>${escapeHtml(challenge.expected.join('\n'))}</pre></div></div></div>`:'';
+  const resultPanel=result?`<div class="challenge-result ${result.passed?'passed':'failed'}" data-challenge-result><div class="challenge-result-head"><strong>${result.passed?'✓ Output verified':'✕ Output did not match'}</strong><span>${result.clockExpired?'time expired':result.timedOut?'execution timed out':`${result.duration}s used`}</span></div><p>${result.passed?'The code ran successfully and produced the expected output.':'The code ran, but the verifier found a mismatch. Compare the actual and expected output, then retry or continue.'}</p><div class="challenge-output-grid"><div><span>Actual output</span><pre>${escapeHtml(resultOutput||'No output')}</pre></div><div><span>Expected output</span><pre>${escapeHtml(challenge.expected.join('\n'))}</pre></div></div></div>`:'';
   const action=result?`<button class="secondary" data-reset-challenge>Retry task</button>${completed<CHALLENGES.length?'<button class="primary" data-next-challenge>Next challenge →</button>':'<button class="primary" data-nav="home">Back to learning →</button>'}`:active?'<button class="secondary" data-reset-challenge>Reset task</button><button class="primary" data-check-challenge>Check output</button>':'<button class="primary" data-start-challenge>Start timer →</button>';
   return chrome(`<main class="page practice-page"><section class="practice-head reveal"><button class="back" data-nav="home">← Learn</button><div class="practice-head-row"><div><p class="eyebrow">Timed practice</p><h1>Write it. Run it. Prove it.</h1><p class="lead">One short JavaScript task at a time. Every challenge has its own time budget, a unique prompt, and a strict output check.</p></div><div class="practice-progress"><strong>${completedLabel}</strong><span>${state.challenge.attempts[challenge.id]||0} attempt${state.challenge.attempts[challenge.id]===1?'':'s'} on this task</span></div></div></section><section class="challenge-card reveal delay-1"><div class="challenge-top"><div><span class="challenge-kicker">${escapeHtml(challenge.difficulty)}</span><p class="eyebrow">${escapeHtml(challenge.topic)}</p><h2 data-challenge-title>${escapeHtml(challenge.title)}</h2></div><div class="challenge-clock"><span>Time limit</span><strong data-challenge-timer>${challengeTimerText(active?(challenge.seconds-(Date.now()-state.challenge.startedAt)/1000):challenge.seconds)}</strong></div></div><p class="challenge-prompt">${escapeHtml(challenge.prompt)}</p><div class="challenge-meta"><span>Task ${String(CHALLENGES.indexOf(challenge)+1).padStart(2,'0')} of ${String(CHALLENGES.length).padStart(2,'0')}</span><span>Output is verified after execution</span></div>${editorShell(code,{label:`${challenge.id}.js`,ariaLabel:'Timed challenge JavaScript editor',challenge,readonly:!!result})}<div class="challenge-shortcuts"><span>VS Code shortcuts</span><kbd>Tab</kbd> indent <kbd>⌘/Ctrl</kbd><kbd>Enter</kbd> run <kbd>Shift</kbd><kbd>Alt</kbd><kbd>F</kbd> format</div><p class="challenge-hint">Hint: ${escapeHtml(challenge.hint)}</p><div class="runner-actions challenge-actions">${action}</div>${resultPanel}</section></main>`);
 }
@@ -364,7 +374,7 @@ async function submitChallenge(timedOut=false){
   const check=root.querySelector('[data-check-challenge]');
   if(check){check.disabled=true;check.textContent='Checking output…'}
   if(timedOut){
-    dispatch({type:'RECORD_CHALLENGE_RESULT',id:challenge.id,result:{passed:false,timedOut:true,duration:challenge.seconds,output:'Time expired before verification.'}},{render:false});
+    dispatch({type:'RECORD_CHALLENGE_RESULT',id:challenge.id,result:{passed:false,timedOut:true,clockExpired:true,duration:challenge.seconds,output:'Time expired before verification.'}},{render:false});
     challengeCheckRunning=false;
     renderApp();
     return;
@@ -373,7 +383,7 @@ async function submitChallenge(timedOut=false){
   const actual=challengeOutput(result.lines||[]);
   const output=actual||String(result.error||'No output');
   const passed=!timedOut&&result.ok&&actual===challenge.expected.join('\n');
-  dispatch({type:'RECORD_CHALLENGE_RESULT',id:challenge.id,result:{passed,timedOut:timedOut||!!result.timeout,duration:Math.min(challenge.seconds,Math.max(0,Math.round(elapsed))),output}},{render:false});
+  dispatch({type:'RECORD_CHALLENGE_RESULT',id:challenge.id,result:{passed,timedOut:timedOut||!!result.timeout,clockExpired:false,duration:Math.min(challenge.seconds,Math.max(0,Math.round(elapsed))),output}},{render:false});
   challengeCheckRunning=false;
   renderApp();
 }

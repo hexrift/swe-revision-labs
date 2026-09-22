@@ -184,6 +184,17 @@ try{
   assert.match(afterCompletedStop.sandboxNote,/still stand/,'the stopped note must say the completed measurements remain valid');
   assert.equal(afterCompletedStop.metrics,metricsBefore,'the completed run’s measurements must remain displayed');
 
+  // Readonly generated Node probes must not be changed by editor shortcuts.
+  await page.goto(`${base}/index.html#lesson/node-host`);
+  const readonlyEditor=page.locator('[data-code-editor][readonly]');
+  const readonlyBefore=await readonlyEditor.inputValue();
+  await readonlyEditor.focus();
+  await readonlyEditor.press('Tab');
+  await readonlyEditor.press('Control+/');
+  await readonlyEditor.press('Alt+ArrowDown');
+  await readonlyEditor.press('Shift+Alt+F');
+  assert.equal(await readonlyEditor.inputValue(),readonlyBefore,'shortcuts must not mutate readonly probe editors');
+
   // Timed practice: the challenge route should expose a real editor, retain
   // code locally, verify output, and advance only after the task is complete.
   await page.goto(`${base}/index.html#practice`);
@@ -191,9 +202,16 @@ try{
   assert.ok(firstChallenge,'the practice route must render a challenge');
   const challengeEditor=page.locator('[data-challenge-editor]');
   await challengeEditor.click();
-  await challengeEditor.press('Control+End');
+  await challengeEditor.fill('one\ntwo');
+  await challengeEditor.evaluate(editor=>editor.setSelectionRange(0,editor.value.length));
   await challengeEditor.press('Tab');
-  assert.match(await challengeEditor.inputValue(),/  $/,'Tab should insert editor indentation');
+  const indented=await challengeEditor.evaluate(editor=>({value:editor.value,start:editor.selectionStart,end:editor.selectionEnd}));
+  assert.equal(indented.value,'  one\n  two','Tab should indent every selected line');
+  assert.equal(indented.start,0,'multi-line indentation should preserve the selection start');
+  assert.equal(indented.end,indented.value.length,'multi-line indentation should preserve the selection end');
+  await challengeEditor.press('Escape');
+  await challengeEditor.press('Tab');
+  assert.notEqual(await page.evaluate(()=>document.activeElement?.matches('[data-challenge-editor]')),true,'Escape then Tab should let keyboard users leave the editor');
   await page.click('[data-start-challenge]');
   await challengeEditor.fill(`function formatUser(user) {
   return user.name + ' — ' + (user.role || 'learner');

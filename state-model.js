@@ -39,12 +39,13 @@ function cleanChallengeResult(value){
   return {
     passed:!!value.passed,
     timedOut:!!value.timedOut,
+    clockExpired:!!value.clockExpired,
     duration:Number.isFinite(Number(value.duration))?Math.max(0,Number(value.duration)):0,
     output:typeof value.output==='string'?value.output.slice(0,4000):''
   };
 }
 
-export function normalizeState(raw,lessons=[],topics=[],quizzes=[],challenges=[]){
+export function normalizeState(raw,lessons=[],topics=[],quizzes=[],challenges=[],now=Date.now()){
   const defaults=createDefaultState(lessons,topics);
   const source=obj(raw)?raw:{};
   const validLessons=new Set(lessons.map(x=>x.id));
@@ -90,8 +91,11 @@ export function normalizeState(raw,lessons=[],topics=[],quizzes=[],challenges=[]
       const attempts=record(value.attempts,validChallenges,v=>Number.isInteger(v)&&v>=0?v:undefined);
       const results=record(value.results,validChallenges,cleanChallengeResult);
       const code=record(value.code,validChallenges,v=>typeof v==='string'?v.slice(0,20000):undefined);
-      const completed=Array.isArray(value.completed)?[...new Set(value.completed.filter(id=>validChallenges.has(id)))]:[];
-      const startedAt=Number.isFinite(Number(value.startedAt))&&Number(value.startedAt)>0?Number(value.startedAt):null;
+      const completed=Array.isArray(value.completed)?[...new Set(value.completed.filter(id=>validChallenges.has(id)&&results[id]?.passed))]:[];
+      const rawStartedAt=Number.isFinite(Number(value.startedAt))&&Number(value.startedAt)>0?Number(value.startedAt):null;
+      const currentChallenge=challenges.find(challenge=>challenge.id===currentId);
+      const expired=rawStartedAt&&Number.isFinite(Number(now))&&Number.isFinite(Number(currentChallenge?.seconds))&&Number(now)-rawStartedAt>=Number(currentChallenge.seconds)*1000;
+      const startedAt=expired?null:rawStartedAt;
       return {currentId,startedAt,attempts,completed,results,code};
     })()
   };
@@ -182,7 +186,9 @@ export function reduceState(state,action,{lessons=[],topics=[],quizzes=[],challe
       const result=cleanChallengeResult(action.result);
       if(!result)return state;
       const attempts=(state.challenge.attempts?.[action.id]||0)+1;
-      const completed=state.challenge.completed?.includes(action.id)?state.challenge.completed:[...(state.challenge.completed||[]),action.id];
+      const completed=result.passed
+        ? [...new Set([...(state.challenge.completed||[]),action.id])]
+        : (state.challenge.completed||[]).filter(id=>id!==action.id);
       next.challenge={...state.challenge, currentId:action.id, startedAt:null, attempts:{...state.challenge.attempts,[action.id]:attempts}, completed, results:{...state.challenge.results,[action.id]:result}};
       return next;
     }
