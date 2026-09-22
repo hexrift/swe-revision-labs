@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict';
 import { TOPICS, LESSONS, getLesson, lessonsFor } from './curriculum.js';
 import { TOPIC_QUIZZES } from './quizzes.js';
+import { LESSON_USE_CASES } from './lesson-use-cases.js';
 
 assert.ok(TOPICS.length >= 10, 'expected comprehensive topic index');
 assert.ok(LESSONS.length >= 100, 'expected comprehensive lesson library');
 
 const topicIds=new Set(TOPICS.map(x=>x.id));
 const lessonIds=new Set();
+assert.equal(Object.keys(LESSON_USE_CASES).length,LESSONS.length,'every current subtopic should have a use-case note');
+for(const id of Object.keys(LESSON_USE_CASES)) assert.ok(LESSONS.some(lesson=>lesson.id===id),`unknown use-case lesson ${id}`);
 for(const lesson of LESSONS){
+  assert.equal(lesson.useWhen,LESSON_USE_CASES[lesson.id],`missing use-case note ${lesson.id}`);
+  assert.ok(typeof lesson.useWhen==='string'&&lesson.useWhen.length>=20,`weak use-case note ${lesson.id}`);
   assert.ok(!lessonIds.has(lesson.id), `duplicate lesson id: ${lesson.id}`);
   lessonIds.add(lesson.id);
   assert.ok(topicIds.has(lesson.topic), `unknown topic ${lesson.topic} for ${lesson.id}`);
