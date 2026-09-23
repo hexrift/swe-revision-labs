@@ -275,7 +275,7 @@ L('call-apply-bind','functions','call, apply and bind',MDN.functions,
 `handler=object.handle;`,
 `handler=object.handle.bind(object);`,
 `function describe(prefix,suffix){return prefix+this.name+suffix} const user={name:"Ada"}; console.log(describe.call(user,"[","]")); console.log(describe.apply(user,["<",">"])); console.log(describe.bind(user,"(",")")());`,
-' this',R(1,2,2),['bind creates a new function; it does not modify the original.'],['Prefer simpler data flow when manual this rebinding is avoidable.']),
+'this',R(1,2,2),['bind creates a new function; it does not modify the original.'],['Prefer simpler data flow when manual this rebinding is avoidable.']),
 
 L('recursion','functions','Recursion and stack frames',MDN.functions,
 'Recursive calls push execution contexts until a base case stops recursion; excessive depth can exhaust the stack.',
@@ -316,7 +316,22 @@ L('descriptors','objects','Property descriptors',MDN.objects,
 'Properties carry descriptor attributes such as writable, enumerable and configurable, or getter/setter functions.',
 `object.id=42;`,
 `Object.defineProperty(object,"id",{value:42,writable:false,enumerable:true});`,
-`const object={}; Object.defineProperty(object,"id",{value:42,writable:false,enumerable:true}); console.log(Object.getOwnPropertyDescriptor(object,"id")); object.id=99; console.log(object.id);`,
+`const object = {};
+Object.defineProperty(object, "id", {
+  value: 42,
+  writable: false,
+  enumerable: true
+});
+
+console.log(Object.getOwnPropertyDescriptor(object, "id"));
+
+try {
+  object.id = 99;
+} catch (error) {
+  console.log("write blocked:", error.name);
+}
+
+console.log("id:", object.id);`,
 'properties',R(1,2,2),['Assignment syntax hides descriptor defaults.'],['Use descriptors only when those low-level semantics matter.']),
 
 L('prototype-chain','objects','Prototype chain lookup',MDN.prototype,

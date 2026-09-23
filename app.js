@@ -41,7 +41,18 @@ function route(){
 function navigate(path){
   closeDrawer();
   const target='#'+path;
-  if(location.hash===target) renderApp(); else location.hash=path;
+  if(location.hash===target){
+    renderApp();
+    scrollToPageTop();
+    return;
+  }
+  // Assigning location.hash lets the browser perform its own anchor scroll
+  // after hashchange. That can overwrite scrollToPageTop() when a lesson is
+  // opened from deep in the page. Push the hash without invoking native
+  // anchor navigation, then render and reset the viewport ourselves.
+  history.pushState(null,'',target);
+  renderApp();
+  scrollToPageTop();
 }
 function scrollToPageTop(){
   const html=document.documentElement;
@@ -70,6 +81,84 @@ function lessonBrief(lesson){
   const useWhen=lesson.useWhen?`<section class="lesson-use-when"><p class="lesson-use-when-label">When to use it</p><p>${escapeHtml(lesson.useWhen)}</p></section>`:'';
   return `<div class="lesson-brief"><div class="lesson-brief-head"><span class="lesson-brief-label">${label}</span><span class="lesson-brief-tag">${tag}</span></div><p class="lesson-brief-summary">${escapeHtml(lesson.summary)}</p><p class="lesson-brief-reason">${reason}</p>${useWhen}</div>`;
 }
+const VISUAL_MODELS={
+  flow:{title:'Follow the value',summary:'Read the operation from input to observable result.',steps:['Input','Evaluate','Result']},
+  binding:{title:'Bindings have a lifetime',summary:'A name points at a value for a particular scope and can be reassigned according to its declaration.',steps:['Declare','Read / write','Leave scope']},
+  scope:{title:'Lexical scope lookup',summary:'The engine searches the current scope first, then walks outward through the lexical chain.',steps:['Inner scope','Outer scope','Global scope']},
+  values:{title:'Values have different semantics',summary:'Primitive values are immutable; objects carry identity and can be shared by reference.',steps:['Value','Type','Operation']},
+  reference:{title:'Identity versus a copy',summary:'Two names can share one object, or a new object can be created with equal data.',steps:['Binding A','Shared identity?','Binding B']},
+  number:{title:'Choose the numeric domain',summary:'Number, BigInt and floating-point calculations have different precision and conversion rules.',steps:['Input','Representation','Precision']},
+  object:{title:'Object property lookup',summary:'A property read combines own properties, prototypes and the receiver used at the call site.',steps:['Own object','Prototype','Resolved value']},
+  coercion:{title:'Make conversions visible',summary:'Explicit conversion turns a hidden coercion rule into a reviewable boundary.',steps:['External value','Convert','Typed operation']},
+  compare:{title:'Compare semantics, not spelling',summary:'Similar-looking operators can have different equality, nullish or ordering rules.',steps:['Operands','Rule','Decision']},
+  stack:{title:'Call stack, one frame at a time',summary:'This is a conceptual stack trace, not a profiler. Calls push frames; returns pop them; async callbacks resume in a later job.',steps:['global / module','current function','next call'],note:'When an exception is not caught, the stack unwinds until an error boundary handles it.'},
+  loop:{title:'Iteration advances state',summary:'Each pass reads the current state, performs work and moves toward a termination condition.',steps:['Initial state','One iteration','Exit condition']},
+  iteration:{title:'The iteration protocol',summary:'Consumers ask an iterator for the next value until it reports done.',steps:['Iterable','next()','{ value, done }']},
+  properties:{title:'Properties carry metadata',summary:'Ownership and descriptor flags decide what a read, write or traversal can observe.',steps:['Own / inherited','Descriptor flags','Traversal result']},
+  function:{title:'Functions are values',summary:'A function can be called, passed, returned and used to create a new scope.',steps:['Define','Pass / call','Return']},
+  this:{title:'this comes from the call site',summary:'The invocation form determines the receiver; arrow functions capture it lexically.',steps:['Call site','Receiver','Method body']},
+  closure:{title:'A closure keeps its environment',summary:'An inner function can retain access to bindings after the outer function has returned.',steps:['Create binding','Return function','Later call']},
+  prototype:{title:'Lookup can walk a prototype chain',summary:'Missing own properties are resolved by following prototypes until a value or null is reached.',steps:['Instance','Prototype','Fallback']},
+  array:{title:'Collections encode intent',summary:'Choose an operation that describes whether you are transforming, filtering, reducing or indexing data.',steps:['Collection','Operation','New result']},
+  map:{title:'Map keys are not object keys',summary:'Map preserves insertion order and uses value identity for keys.',steps:['Key','Lookup','Value']},
+  set:{title:'Set stores unique values',summary:'Adding the same value again does not create another entry.',steps:['Candidate','Membership','Unique set']},
+  memory:{title:'Reachability controls lifetime',summary:'Garbage collection can reclaim objects that are no longer reachable from live roots.',steps:['Root','Reachable graph','Collectable']},
+  regex:{title:'A pattern scans text',summary:'Regular expressions describe matching rules; flags and capture groups change what the result contains.',steps:['Pattern','Scan','Match']},
+  generator:{title:'Generators pause and resume',summary:'yield suspends the generator while preserving its local execution state.',steps:['Call','yield','next()']},
+  promise:{title:'Promises represent future completion',summary:'A promise settles once; handlers create the next link in the chain.',steps:['Pending','Fulfilled / rejected','Continuation']},
+  'event-loop':{title:'Jobs resume in an execution model',summary:'Awaited work yields control; callbacks and microtasks become runnable according to host scheduling rules.',steps:['Call stack','Queue','Callback']},
+  host:{title:'The host supplies capabilities',summary:'JavaScript semantics stay portable while the browser or Node host adds APIs and resources.',steps:['ECMAScript','Host API','Resource']},
+  module:{title:'Modules create explicit boundaries',summary:'Imports and exports make dependencies, evaluation and public API surface visible.',steps:['Export','Resolve','Import']},
+  resource:{title:'Resources need a lifecycle',summary:'Acquire, use and release external resources deliberately, especially across errors.',steps:['Acquire','Use','Dispose']},
+  binary:{title:'Bytes need a representation',summary:'Typed views give structured access to an underlying byte buffer.',steps:['Buffer','Typed view','Read / write']},
+  proxy:{title:'Operations can be intercepted',summary:'Proxy traps observe or redefine object operations; Reflect helps preserve default behavior.',steps:['Operation','Trap','Reflect / result']},
+  'browser-host':{title:'Browser JavaScript has a host',summary:'The browser connects the engine to documents, events, rendering, networking and storage.',steps:['Engine','Web API','Pixels / network']},
+  dom:{title:'The DOM is a tree',summary:'Document updates change nodes; rendering work follows from the mutations that become observable.',steps:['Nodes','Mutation','Render']},
+  'render-pipeline':{title:'Rendering is a pipeline',summary:'Style, layout, paint and compositing are downstream effects of main-thread work.',steps:['JavaScript','Layout / paint','Screen']},
+  event:{title:'Events move through a target tree',summary:'Capture, target and bubble phases give event handlers a predictable order.',steps:['Capture','Target','Bubble']},
+  network:{title:'Network work has boundaries',summary:'Requests, responses and connection state are asynchronous resources with failure modes.',steps:['Request','Network','Response']},
+  worker:{title:'Workers isolate JavaScript execution',summary:'Messages cross a boundary; the worker does not share ordinary JavaScript objects with the page.',steps:['Main thread','Message','Worker']},
+  storage:{title:'Storage is a persistence boundary',summary:'Browser storage outlives a particular function call, so serialization and versioning matter.',steps:['Serialize','Persist','Read']},
+  performance:{title:'Measure before optimizing',summary:'Performance APIs expose timings and marks; use measurements to choose the next experiment.',steps:['Mark','Measure','Decision']},
+  'node-host':{title:'Node adds server-side capabilities',summary:'The JavaScript engine runs inside a process with OS, filesystem, network and diagnostic APIs.',steps:['Engine','Node APIs','OS resources']},
+  'node-module':{title:'Node module resolution is a contract',summary:'Package metadata and module format decide how a dependency is found and evaluated.',steps:['Specifier','Resolver','Module']},
+  'node-event-loop':{title:'Node coordinates event-loop work',summary:'Bounded callbacks and asynchronous I/O protect latency for other work sharing the process.',steps:['Callback','libuv / OS','Ready work']},
+  'node-event':{title:'Events connect producers and consumers',summary:'Event emitters make lifecycle and error channels explicit, but listeners still need ownership.',steps:['Emitter','Listener','Cleanup']},
+  'node-fs':{title:'Filesystem calls cross a process boundary',summary:'Sync calls block the process; async calls let the host progress other work while waiting for I/O.',steps:['Path','OS I/O','Result']},
+  'node-buffer':{title:'Buffers hold bytes',summary:'Buffer operations are explicit about encoding, slicing and ownership of binary data.',steps:['Bytes','Encoding','Consumer']},
+  'node-stream':{title:'Streams control flow and pressure',summary:'Readable, transform and writable stages move data incrementally; backpressure prevents unbounded buffering.',steps:['Readable','Transform','Writable']},
+  'node-http':{title:'HTTP is a stream of messages',summary:'Headers, body flow, status and connection lifetime form a protocol boundary.',steps:['Request','Handler','Response']},
+  'node-worker':{title:'Worker threads move CPU work',summary:'Workers can isolate CPU-heavy JavaScript while messages make ownership explicit.',steps:['Main thread','Worker','Message']},
+  'node-process':{title:'Processes have lifecycle boundaries',summary:'Child processes and signals require explicit ownership, exit handling and cleanup.',steps:['Parent','Child','Exit']},
+  'node-memory':{title:'Memory metrics describe different things',summary:'Heap, resident memory and external/native allocations are separate signals; interpret the right one.',steps:['JS heap','Native / external','RSS']},
+  'node-performance':{title:'Runtime metrics explain latency',summary:'Event-loop delay and utilization show whether callbacks or external work are limiting throughput.',steps:['Work','Metric','Action']},
+  'node-context':{title:'Async context follows work',summary:'Context APIs associate request metadata with asynchronous continuations without passing it through every function.',steps:['Context','Async hop','Read']},
+  'node-error':{title:'Errors need an ownership boundary',summary:'Classify, preserve and handle errors where the application can make a useful decision.',steps:['Failure','Boundary','Recovery']},
+  'node-os':{title:'The OS is part of the runtime',summary:'Threads, sockets, descriptors and memory are finite resources even when JavaScript looks asynchronous.',steps:['Process','OS resource','Limit']},
+  queue:{title:'Queue order changes observable output',summary:'Microtasks and tasks run at defined points relative to the current stack and rendering.',steps:['Current stack','Microtask','Task']}
+};
+function lessonVisual(lesson){
+  if(!lesson.visual)return '';
+  const model=VISUAL_MODELS[lesson.visual]||{title:'Runtime model',summary:'Use this compact model to connect the example to the surrounding system.',steps:['Input','Rule','Observed result']};
+  const steps=model.steps.map((step,index)=>`<div class="lesson-visual-step"><span>${String(index+1).padStart(2,'0')}</span><strong>${escapeHtml(step)}</strong></div>`).join('<b class="lesson-visual-arrow" aria-hidden="true">→</b>');
+  const visual=lesson.visual==='stack'?`<div class="stack-visual lesson-stack-visual" role="img" aria-label="${escapeHtml(model.steps.join(' then '))}">${model.steps.slice().reverse().map((step,index)=>`<i style="--i:${index}"><b>frame ${model.steps.length-index}</b>${escapeHtml(step)}</i>`).join('')}</div>`:`<div class="lesson-visual-flow" role="img" aria-label="${escapeHtml(model.steps.join(' then '))}">${steps}</div>`;
+  return `<section class="lesson-visual reveal" data-lesson-visual="${escapeHtml(lesson.visual)}"><div class="lesson-visual-head"><div><p class="eyebrow">Visual model</p><h2>${escapeHtml(model.title)}</h2></div><span>conceptual map</span></div><p>${escapeHtml(model.summary)}</p>${visual}${model.note?`<p class="lesson-visual-note">${escapeHtml(model.note)}</p>`:''}</section>`;
+}
+function tddPanel(lesson){
+  const template=`const actual = /* call the behavior */;\nconst expected = /* state the contract */;\nconsole.assert(actual === expected, "${lesson.title}: behavior");`;
+  return `<details class="tdd-panel reveal"><summary><span><p class="eyebrow">Practice with TDD</p><strong>Turn “${escapeHtml(lesson.title)}” into a small test</strong></span><em>Red → Green → Refactor</em></summary><div class="tdd-body"><p>Start with one observable behavior. Keep the test small enough that a failure explains what to fix.</p><div class="tdd-steps"><article><span>01</span><strong>Red</strong><p>Write the assertion before the implementation.</p></article><article><span>02</span><strong>Green</strong><p>Make the smallest change that satisfies it.</p></article><article><span>03</span><strong>Refactor</strong><p>Improve names and boundaries while the test stays green.</p></article></div><pre class="tdd-template"><code>${escapeHtml(template)}</code></pre><p class="tdd-note">Run the example, change one thing, and use the output as your feedback loop. The timed practice area turns this same loop into a short task.</p><button class="secondary" data-nav="practice">Try a timed task →</button></div></details>`;
+}
+function swePracticesView(){
+  const practices=[
+    ['Small changes','Keep each change reviewable. A narrow diff makes failures easier to localize and rollback.'],
+    ['Observable behavior','Prefer a test, log, metric or trace that makes the important behavior visible before optimizing it.'],
+    ['Explicit boundaries','Name ownership, error handling, cleanup and host capabilities instead of relying on hidden global state.'],
+    ['Tests at the right level','Use fast unit tests for rules, integration tests for boundaries and browser/runtime tests for host behavior.'],
+    ['Performance with evidence','Measure first, change one variable, then compare the same metric under the same conditions.'],
+    ['Review for failure modes','Ask what happens on missing data, repeated calls, cancellation, timeouts, partial failure and shutdown.']
+  ];
+  return chrome(`<main class="page practices-page"><section class="practices-head reveal"><p class="eyebrow">Working like a software engineer</p><h1>Build habits that survive production.</h1><p class="lead">A compact checklist for turning language knowledge into code that is testable, observable and safe to change.</p></section><section class="practice-principles reveal delay-1">${practices.map(([title,body],index)=>`<article><span>${String(index+1).padStart(2,'0')}</span><h2>${escapeHtml(title)}</h2><p>${escapeHtml(body)}</p></article>`).join('')}</section><section class="tdd-feature reveal delay-2"><div><p class="eyebrow">Test-driven development</p><h2>Use feedback as a design tool.</h2><p>Red makes the desired behavior precise. Green proves the smallest implementation. Refactor improves the shape without changing the contract.</p></div><div class="tdd-feature-flow"><span>write a failing test</span><b>→</b><span>make it pass</span><b>→</b><span>clean it up</span></div></section><section class="practices-actions reveal delay-3"><button class="secondary" data-nav="index">Browse the curriculum</button><button class="primary" data-nav="practice">Start timed practice →</button></section></main>`);
+}
 function firstUnvisited(){return LESSONS.find(x=>!state.visited[x.id])||LESSONS[0]}
 function resumeLesson(){return getLesson(state.current)||firstUnvisited()}
 function percent(a,b){return b?Math.round(a/b*100):0}
@@ -97,6 +186,7 @@ function drawer(){
       <button data-nav="home"><span>01</span><b>Learn</b><small>Continue your current concept</small><em>→</em></button>
       <button data-nav="index"><span>02</span><b>Full index</b><small>${LESSONS.length} lessons · searchable</small><em>→</em></button>
       <button data-nav="practice"><span>03</span><b>Timed practice</b><small>Write, run, and verify code</small><em>→</em></button>
+      <button data-nav="practices"><span>04</span><b>SWE practices</b><small>TDD, review and reliability habits</small><em>→</em></button>
     </nav>
     <button class="theme-toggle" data-theme-toggle aria-pressed="${dark}" aria-label="Switch to ${dark?'light':'dark'} mode">${themeToggleMarkup()}</button>
     <div class="drawer-topics"><p class="eyebrow">Topics</p>${TOPICS.map(topic=>`<button data-topic="${topic.id}">${escapeHtml(topic.title)}<span>${lessonsFor(topic.id).length}</span></button>`).join('')}</div>
@@ -116,6 +206,7 @@ function homeView(){
     </section>
     <section class="continue-card reveal delay-1"><div><span class="tag">Continue</span><h2>${escapeHtml(resume.title)}</h2><p>${escapeHtml(getTopic(resume.topic)?.title||'')} · ${sourceName(resume.source)}</p></div><div class="continue-flow"><span>concept</span><b>→</b><span>code</span><b>→</b><span>run</span><b>→</b><span>machine</span></div><button class="primary" data-lesson="${resume.id}">Open lesson</button></section>
     <section class="practice-promo reveal delay-2"><div><p class="eyebrow">Timed practice</p><h2>Can you write it under pressure?</h2><p>Short, unique JavaScript tasks with a real timer and output verification. Your editor stays familiar; the answer has to run.</p></div><div class="practice-promo-meta"><span>${CHALLENGES.length} challenges</span><span>${Math.min(...CHALLENGES.map(challenge=>challenge.seconds))}–${Math.max(...CHALLENGES.map(challenge=>challenge.seconds))} seconds</span><button class="secondary" data-nav="practice">Start practising →</button></div></section>
+    <section class="swe-promo reveal delay-3"><div><p class="eyebrow">Build better software</p><h2>Learn the habits around the code.</h2><p>Short guidance on TDD, reviewability, observability, boundaries and failure modes—so the concepts transfer beyond a toy example.</p></div><button class="secondary" data-nav="practices">Open SWE practices →</button></section>
     <section class="section reveal delay-2"><div class="section-head"><div><p class="eyebrow">Curriculum</p><h2>Pick one topic</h2></div><button class="text-button" data-nav="index">Full index →</button></div><div class="topic-grid">${topicCards}</div></section>
     <section class="host-compare reveal delay-3"><article><p class="eyebrow">Client</p><h3>Browser host</h3><p>JavaScript engine plus DOM, events, rendering, fetch, storage, workers and WebSocket.</p><div class="mini-machine"><span>JS</span><b>+</b><span>Web APIs</span><b>+</b><span>renderer</span></div></article><article><p class="eyebrow">Backend</p><h3>Node.js host</h3><p>JavaScript engine plus process, filesystem, network, buffers, streams, libuv and OS resources.</p><div class="mini-machine"><span>JS</span><b>+</b><span>Node</span><b>+</b><span>OS</span></div></article></section>
   </main>`);
@@ -433,7 +524,9 @@ function lessonView(lesson){
     <section class="lesson-head reveal"><button class="back" data-nav="index">← Index</button><span class="position">${LESSONS.indexOf(lesson)+1} / ${LESSONS.length}</span><p class="eyebrow">${escapeHtml(topic?.title||'JavaScript')}</p><h1>${escapeHtml(lesson.title)}</h1>${lessonBrief(lesson)}<a class="source-pill" href="${lesson.source}" target="_blank" rel="noreferrer"><b>${escapeHtml(sourceName(lesson.source))}</b><span>${escapeHtml(sourceDomain(lesson.source))}</span><em>↗</em></a></section>
     ${lesson.debug?debugBlock(lesson):`<section class="compare-grid reveal delay-2">${compareCard('poor',lesson.compare.bad,lesson.source)}<div class="compare-arrow">→</div>${compareCard('better',lesson.compare.good,lesson.source)}</section>`}
     ${lesson.id==='syntax-expressions'?expressionVisual():''}
+    ${lessonVisual(lesson)}
     ${runnerBlock(lesson)}
+    ${tddPanel(lesson)}
     ${tips(lesson)}
     <section class="reference-card reveal"><div><p class="eyebrow">Primary source for this lesson</p><h3>${escapeHtml(sourceName(lesson.source))}</h3><p>Both the explanation and examples are adapted for teaching from this official reference.</p></div><a href="${lesson.source}" target="_blank" rel="noreferrer">Open source ↗</a></section>
     <section class="lesson-actions reveal"><button class="secondary" data-nav="index">Back to topic</button>${topicEnd?`<button class="primary" data-quiz="${lesson.topic}">Take topic quiz →</button>`:next?`<button class="primary" data-lesson="${next.id}">Next lesson →</button>`:'<button class="primary" data-nav="home">Curriculum complete →</button>'}</section>
@@ -459,6 +552,7 @@ function renderApp(){
       root.innerHTML=challengeView();
       syncCodeEditor();
     }
+    else if(r.view==='practices') root.innerHTML=swePracticesView();
     else if(r.view==='quiz'){
       if(!getTopic(r.id)||!getTopicQuiz(r.id)){navigate('index');return}
       root.innerHTML=quizView(r.id);
@@ -587,6 +681,7 @@ root.addEventListener('scroll',event=>{
 },true);
 root.addEventListener('click',event=>{if(event.target.matches('[data-drawer-backdrop]'))closeDrawer()});
 window.addEventListener('hashchange',()=>{renderApp();scrollToPageTop()});
+window.addEventListener('popstate',()=>{renderApp();scrollToPageTop()});
 window.addEventListener('keydown',event=>{if(handleEditorShortcut(event))return;if(event.key==='Escape')closeDrawer()});
 
 async function removeLegacyWorkers(){

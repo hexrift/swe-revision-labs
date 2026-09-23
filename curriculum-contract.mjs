@@ -49,4 +49,8 @@ assert.ok(LESSONS.some(x=>x.id==='node-workers'));
 assert.ok(LESSONS.filter(x=>x.topic==='debugging').length>=10,'expected advanced debugging section');
 const rafLesson=LESSONS.find(x=>x.id==='request-animation-frame');
 assert.match(rafLesson.code,/await new Promise/,'rAF example must await its final frame so the runner measures the full animation');
+const descriptors=LESSONS.find(x=>x.id==='descriptors');
+assert.match(descriptors.code,/try\s*\{/,'descriptor example must catch its intentional read-only write failure');
+assert.match(descriptors.code,/write blocked:/,'descriptor example must explain the expected TypeError in its output');
+assert.match(descriptors.code,/console\.log\("id:", object\.id\)/,'descriptor example must continue after demonstrating the blocked write');
 console.log(`Curriculum contracts passed: ${TOPICS.length} topics, ${LESSONS.length} lessons.`);
