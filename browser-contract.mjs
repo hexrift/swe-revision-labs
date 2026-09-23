@@ -121,6 +121,9 @@ try{
   assert.ok(editorPresentation.editorLines>1,'the runner example must render as readable multi-line code');
   assert.equal(editorPresentation.gutterLines,editorPresentation.editorLines,'the editor gutter must track code lines');
   assert.equal(editorPresentation.workbench,true,'the runner must use the editor workbench');
+  assert.equal(await page.locator('[data-lesson-visual]').count(),1,'lesson visual metadata must be rendered');
+  assert.match(await page.locator('[data-lesson-visual]').textContent(),/Lexical scope lookup/,'the visual model must explain the current lesson');
+  assert.equal(await page.locator('.tdd-panel').count(),1,'each lesson should expose a compact TDD practice panel');
 
   const gutterScroll=await page.evaluate(()=>{
     const editor=document.querySelector('[data-code-editor]');
@@ -139,6 +142,20 @@ try{
   const debugBrief=await page.locator('.lesson-brief').textContent();
   assert.match(debugBrief,/What this lab is diagnosing/,'debug lessons need a diagnostic brief');
   assert.doesNotMatch(debugBrief,/Why the right-hand example is better/,'debug lessons must not claim to have a right-hand comparison');
+
+  await page.goto(`${base}/index.html#lesson/descriptors`);
+  await page.click('[data-run-code]');
+  await page.waitForFunction(()=>document.querySelector('[data-run-output]')?.textContent.startsWith('✓'));
+  const descriptorOutput=await page.locator('[data-run-output]').textContent();
+  assert.match(descriptorOutput,/write blocked: TypeError/,'read-only descriptor writes must be explained as expected output');
+  assert.match(descriptorOutput,/id: 42/,'descriptor example must continue after the blocked write');
+
+  await page.goto(`${base}/index.html#practices`);
+  assert.match(await page.locator('h1').textContent(),/habits that survive production/,'SWE practices should be a first-class section');
+  assert.match(await page.locator('main').textContent(),/Test-driven development/,'SWE practices should include TDD guidance');
+
+  await page.goto(`${base}/index.html#home`);
+  assert.equal(await page.locator('link[rel="icon"]').count(),1,'the app should advertise a favicon');
 
   await page.goto(`${base}/index.html#lesson/lexical-scope`);
   await page.evaluate(()=>{document.documentElement.style.scrollBehavior='auto';window.scrollTo(0,document.body.scrollHeight)});
