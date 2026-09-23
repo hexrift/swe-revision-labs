@@ -34,9 +34,6 @@ export function renderBrowserMetrics(result){
   if(heapDelta!==null){
     cards.push(metric('JS heap delta',bytes(heapDelta),'Browser-exposed performance.memory; Chromium-specific',heapDelta>1024*1024?'hot':''));
     cards.push(metric('JS heap after',bytes(memoryAfter),'Browser-exposed performance.memory'));
-  } else {
-    cards.push(metric('JS heap','not exposed','This browser did not provide performance.memory'));
-  }
   return `<div class="actual-head"><div><p class="eyebrow">Measured in this browser</p><h3>${esc(result.realm==='browser-main-thread'?'Browser main thread':'Disposable JavaScript worker')}</h3></div><span>${result.ok?'completed':'failed / stopped'}</span></div><div class="actual-grid">${cards.join('')}</div>${result.timeout?'<p class="actual-warning">The safety timeout terminated the execution. The reported duration is the timeout budget, not completion time.</p>':''}`;
 }
 
