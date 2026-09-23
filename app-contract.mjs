@@ -44,7 +44,7 @@ assert.match(source,/gutter\.scrollTop=editor\.scrollTop/);
 assert.match(source,/What this lab is diagnosing/);
 assert.match(source,/function scrollToPageTop\(\)/);
 assert.match(source,/WHY_BETTER_PREFIXES/,'lesson briefs should explain the specific design choice');
-assert.match(source,/function whyBetter\\(lesson\\)/,'lesson briefs should be lesson-specific');
+assert.match(source,/function whyBetter\(lesson\)/,'lesson briefs should be lesson-specific');
 assert.match(source,/Compared with the left example/,'lesson briefs should compare the two examples');
 assert.doesNotMatch(source,/The clearer version makes the key behaviour visible/,'generic repeated lesson copy must not return');
 assert.match(source,/history\.pushState\(null,'',target\)/,'internal navigation should avoid native anchor scrolling');
