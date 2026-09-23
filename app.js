@@ -41,7 +41,18 @@ function route(){
 function navigate(path){
   closeDrawer();
   const target='#'+path;
-  if(location.hash===target) renderApp(); else location.hash=path;
+  if(location.hash===target){
+    renderApp();
+    scrollToPageTop();
+    return;
+  }
+  // Assigning location.hash lets the browser perform its own anchor scroll
+  // after hashchange. That can overwrite scrollToPageTop() when a lesson is
+  // opened from deep in the page. Push the hash without invoking native
+  // anchor navigation, then render and reset the viewport ourselves.
+  history.pushState(null,'',target);
+  renderApp();
+  scrollToPageTop();
 }
 function scrollToPageTop(){
   const html=document.documentElement;
@@ -670,6 +681,7 @@ root.addEventListener('scroll',event=>{
 },true);
 root.addEventListener('click',event=>{if(event.target.matches('[data-drawer-backdrop]'))closeDrawer()});
 window.addEventListener('hashchange',()=>{renderApp();scrollToPageTop()});
+window.addEventListener('popstate',()=>{renderApp();scrollToPageTop()});
 window.addEventListener('keydown',event=>{if(handleEditorShortcut(event))return;if(event.key==='Escape')closeDrawer()});
 
 async function removeLegacyWorkers(){
