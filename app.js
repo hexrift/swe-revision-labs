@@ -72,12 +72,72 @@ function editorShell(code,{label='lesson.js',readonly=false,ariaLabel='JavaScrip
     <div class="editor-statusbar"><span data-editor-line-status>${formatted.split('\n').length} ${formatted.split('\n').length===1?'line':'lines'}</span><span>JavaScript · UTF-8 · Spaces: 2</span></div>
   </div>`;
 }
+const WHY_BETTER_PREFIXES={
+  flow:'separates the input, operation and observable result.',
+  binding:'distinguishes rebinding a name from mutating the value it references.',
+  scope:'keeps each name’s lifetime visible at the scope where it is used.',
+  values:'makes the value type and its semantics explicit.',
+  reference:'shows whether two bindings share identity or contain copied data.',
+  number:'makes the numeric representation and its precision trade-off visible.',
+  object:'shows how the property is resolved instead of hiding the lookup path.',
+  coercion:'puts the conversion at an explicit boundary before the operation.',
+  compare:'names the comparison rule so similar-looking operators are not confused.',
+  stack:'makes the order of calls and returns traceable.',
+  loop:'shows how state changes and what makes the iteration stop.',
+  iteration:'shows the protocol that produces each value and signals completion.',
+  properties:'exposes the descriptor or ownership rule that controls the result.',
+  function:'keeps the function’s input, work and returned value easy to follow.',
+  this:'makes the call site responsible for the receiver visible.',
+  closure:'shows which binding remains available when the function runs later.',
+  prototype:'shows the lookup fallback instead of treating inherited data as local.',
+  array:'chooses an operation whose name matches the collection’s intended job.',
+  map:'makes key identity and lookup behaviour explicit.',
+  set:'makes uniqueness and membership the centre of the example.',
+  memory:'connects object lifetime to reachability from a live root.',
+  regex:'gives the pattern a named, inspectable matching result.',
+  generator:'shows when execution pauses and how the next value resumes it.',
+  promise:'makes settlement and continuation order observable.',
+  'event-loop':'separates current-stack work from queued asynchronous work.',
+  host:'shows which behaviour comes from JavaScript and which comes from the host.',
+  module:'makes the dependency boundary and public API visible.',
+  resource:'makes acquisition, use and cleanup part of the control flow.',
+  binary:'keeps the byte representation and the typed interpretation distinct.',
+  proxy:'shows the intercepted operation and the default Reflect path.',
+  'browser-host':'shows the boundary between the engine, Web APIs and rendered output.',
+  dom:'makes the tree mutation that produces the visible result explicit.',
+  'render-pipeline':'connects JavaScript work to the rendering stage it can affect.',
+  event:'shows the event phase and the ownership of the listener.',
+  network:'makes request, response and failure boundaries visible.',
+  worker:'shows the message boundary instead of implying shared JavaScript state.',
+  storage:'makes serialization and persistence separate from in-memory state.',
+  performance:'turns a performance claim into a measurement and a decision.',
+  'node-host':'shows which capability comes from Node and which comes from the OS.',
+  'node-module':'makes package resolution and module format explicit.',
+  'node-event-loop':'shows how callbacks, I/O and ready work share the process.',
+  'node-event':'makes event ownership and listener cleanup visible.',
+  'node-fs':'shows the process boundary and the cost of waiting for filesystem I/O.',
+  'node-buffer':'makes bytes, encoding and consumer expectations explicit.',
+  'node-stream':'shows incremental flow and where backpressure is applied.',
+  'node-http':'makes the HTTP request/handler/response lifecycle visible.',
+  'node-worker':'shows CPU work moving across a worker message boundary.',
+  'node-process':'makes parent, child and exit ownership explicit.',
+  'node-memory':'separates JavaScript heap, native memory and resident process size.',
+  'node-performance':'connects runtime metrics to the latency decision they support.',
+  'node-context':'shows how request context crosses an asynchronous boundary.',
+  'node-error':'places failure classification and recovery at an explicit boundary.',
+  'node-os':'shows the finite operating-system resource behind the JavaScript API.',
+  queue:'makes the ordering between the current stack, microtasks and tasks observable.'
+};
+function whyBetter(lesson){
+  const reason=WHY_BETTER_PREFIXES[lesson.visual]||('keeps "'+lesson.title+'" explicit in the output.');
+  const tip=lesson.tips?.[0]||'The surrounding names and output make the intended contract easier to review.';
+  return 'Compared with the left example, this version '+reason+' '+tip;
+}
 function lessonBrief(lesson){
-  const tip=lesson.tips?.[0]||'Make the important behaviour explicit so it is easier to review and maintain.';
   const debug=lesson.debug;
   const label=debug?'What this lab is diagnosing':'Why the right-hand example is better';
   const tag=debug?'diagnose first':'read this first';
-  const reason=debug?`<strong>Start here:</strong> Identify the failure mode before revealing the diagnosis. ${escapeHtml(debug.question)}`:`<strong>What improves:</strong> The clearer version makes the key behaviour visible instead of relying on an implicit rule or hiding the result. ${escapeHtml(tip)}`;
+  const reason=debug?`<strong>Start here:</strong> Identify the failure mode before revealing the diagnosis. ${escapeHtml(debug.question)}`:`<strong>Why this version:</strong> ${escapeHtml(whyBetter(lesson))}`;
   const useWhen=lesson.useWhen?`<section class="lesson-use-when"><p class="lesson-use-when-label">When to use it</p><p>${escapeHtml(lesson.useWhen)}</p></section>`:'';
   return `<div class="lesson-brief"><div class="lesson-brief-head"><span class="lesson-brief-label">${label}</span><span class="lesson-brief-tag">${tag}</span></div><p class="lesson-brief-summary">${escapeHtml(lesson.summary)}</p><p class="lesson-brief-reason">${reason}</p>${useWhen}</div>`;
 }
