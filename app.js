@@ -137,7 +137,7 @@ function lessonBrief(lesson){
   const debug=lesson.debug;
   const label=debug?'What this lab is diagnosing':'Why the right-hand example is better';
   const tag=debug?'diagnose first':'read this first';
-  const reason=debug?\`<strong>Start here:</strong> Identify the failure mode before revealing the diagnosis. \${escapeHtml(debug.question)}\`:\`<strong>Why this version:</strong> \${escapeHtml(whyBetter(lesson))}\`;
+  const reason=debug?`<strong>Start here:</strong> Identify the failure mode before revealing the diagnosis. ${escapeHtml(debug.question)}`:`<strong>Why this version:</strong> ${escapeHtml(whyBetter(lesson))}`;
   const useWhen=lesson.useWhen?`<section class="lesson-use-when"><p class="lesson-use-when-label">When to use it</p><p>${escapeHtml(lesson.useWhen)}</p></section>`:'';
   return `<div class="lesson-brief"><div class="lesson-brief-head"><span class="lesson-brief-label">${label}</span><span class="lesson-brief-tag">${tag}</span></div><p class="lesson-brief-summary">${escapeHtml(lesson.summary)}</p><p class="lesson-brief-reason">${reason}</p>${useWhen}</div>`;
 }
